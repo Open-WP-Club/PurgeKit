@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.0
+Stable tag: 0.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -77,6 +77,19 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.1.2 =
+* New: layer map with purge order, last result per layer and a per-layer purge button.
+* New: saved flush rules (when X changes, do Y on these layers), with a preview of what the next flush would do.
+* New: after a purge, optionally check that the home page and purged pages no longer serve a stale copy.
+* New: warm the cache from the site sitemap (WordPress core, Yoast, Rank Math, All in One SEO, SEOPress).
+* New: scheduled one-off purges, paths that are never purged, and switching a layer off without losing its settings.
+* New: CDN purges pause on staging sites and on copies of the site with a new address.
+* New: Site Health test and an admin notice when a purge fails.
+* New: Fastly, Bunny CDN, KeyCDN, Sucuri and Nginx FastCGI cache layers, Slack and email alerts, CSV export of the history, multisite support.
+* Improved: a changed post also purges its custom post type archive, the blog page, parent pages and categories, the first listing pages, translations (Polylang, WPML) and, for WooCommerce, the shop page, upsells, cross-sells and the product behind a variation.
+* Fixed: two different posts changed before a flush were treated as one, so the second was never purged.
+* Fixed: with saved rules, changes that affect the whole site were not purged.
 
 = 0.1.0 =
 * First release.

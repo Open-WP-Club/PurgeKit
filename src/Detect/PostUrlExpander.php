@@ -18,6 +18,10 @@ final class PostUrlExpander implements UrlExpander {
 
 	private function post_urls( int $post_id ): array {
 		$post = get_post( $post_id );
+		// A variation has no page of its own; what changes is its product.
+		if ( $post && 'product_variation' === $post->post_type && $post->post_parent > 0 ) {
+			$post = get_post( (int) $post->post_parent );
+		}
 		if ( ! $post ) {
 			return array();
 		}
@@ -28,12 +32,12 @@ final class PostUrlExpander implements UrlExpander {
 				continue;
 			}
 			foreach ( (array) get_the_terms( $post, $tax->name ) as $term ) {
-				$link = $term instanceof \WP_Term ? get_term_link( $term ) : null;
-				if ( is_string( $link ) ) {
-					$urls[] = $link;
+				if ( $term instanceof \WP_Term ) {
+					array_push( $urls, ...$this->term_pages( $term->term_id, $tax->name ) );
 				}
 			}
 		}
+		array_push( $urls, ...$this->shop( $post ) );
 
 		$urls[] = get_author_posts_url( (int) $post->post_author );
 		array_push( $urls, ...$this->archives( $post ), ...$this->ancestors( $post ), ...$this->translations( $post ), ...$this->sitemaps() );
@@ -61,6 +65,11 @@ final class PostUrlExpander implements UrlExpander {
 				$lists[] = $permalink;
 			}
 		}
+		return $this->paged( $lists );
+	}
+
+	/** The listing itself plus its first pages: a new or changed item can shift everything after it. */
+	private function paged( array $lists ): array {
 		$urls  = $lists;
 		$depth = max( 0, min( 5, (int) apply_filters( 'purgekit_pagination_depth', 2 ) ) );
 		if ( '' !== (string) get_option( 'permalink_structure' ) ) {
@@ -122,8 +131,39 @@ final class PostUrlExpander implements UrlExpander {
 		return array_map( static fn( $path ) => home_url( '/' . $path ), \PurgeKit\Warm\SitemapReader::PATHS );
 	}
 
+	/** A term's archive, the archives of its parents (they list the same items) and their first pages. */
+	private function term_pages( int $term_id, string $taxonomy ): array {
+		$links = array();
+		foreach ( array_merge( array( $term_id ), array_map( 'intval', get_ancestors( $term_id, $taxonomy, 'taxonomy' ) ) ) as $id ) {
+			$link = get_term_link( $id, $taxonomy );
+			if ( is_string( $link ) ) {
+				$links[] = $link;
+			}
+		}
+		return $this->paged( $links );
+	}
+
+	/** WooCommerce: the shop page and the products shown next to this one (upsells and cross-sells). */
+	private function shop( \WP_Post $post ): array {
+		$urls = array();
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$urls[] = (string) wc_get_page_permalink( 'shop' );
+		}
+		if ( 'product' === $post->post_type && function_exists( 'wc_get_product' ) ) {
+			$product = wc_get_product( $post->ID );
+			if ( is_object( $product ) && method_exists( $product, 'get_upsell_ids' ) && method_exists( $product, 'get_cross_sell_ids' ) ) {
+				foreach ( array_slice( array_merge( (array) $product->get_upsell_ids(), (array) $product->get_cross_sell_ids() ), 0, 20 ) as $id ) {
+					$link = get_permalink( (int) $id );
+					if ( $link ) {
+						$urls[] = $link;
+					}
+				}
+			}
+		}
+		return $urls;
+	}
+
 	private function term_urls( int $term_id, string $taxonomy ): array {
-		$link = get_term_link( $term_id, $taxonomy );
-		return array( home_url( '/' ), is_string( $link ) ? $link : '' );
+		return array_merge( array( home_url( '/' ) ), $this->term_pages( $term_id, $taxonomy ) );
 	}
 }

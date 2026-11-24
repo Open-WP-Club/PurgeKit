@@ -50,4 +50,37 @@ final class PostUrlExpanderTest extends \WP_UnitTestCase {
 		$id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
 		$this->assertContains( get_permalink( $blog ), ( new PostUrlExpander() )->expand( Change::forUrls( 'post', array(), array( 'post_id' => $id ) ) ) );
 	}
+
+	public function test_parent_categories_and_their_pages_are_purged_too(): void {
+		update_option( 'permalink_structure', '/%postname%/' );
+		$top  = self::factory()->category->create( array( 'name' => 'Top' ) );
+		$sub  = self::factory()->category->create( array( 'name' => 'Sub', 'parent' => $top ) );
+		$id   = self::factory()->post->create( array( 'post_status' => 'publish', 'post_category' => array( $sub ) ) );
+		$urls = ( new PostUrlExpander() )->expand( Change::forUrls( 'post', array(), array( 'post_id' => $id ) ) );
+		$this->assertContains( get_category_link( $sub ), $urls );
+		$this->assertContains( get_category_link( $top ), $urls );
+		$this->assertContains( trailingslashit( get_category_link( $top ) ) . 'page/2/', $urls );
+	}
+
+	public function test_a_changed_term_also_purges_its_parent_and_pagination(): void {
+		update_option( 'permalink_structure', '/%postname%/' );
+		$top  = self::factory()->category->create( array( 'name' => 'Top2' ) );
+		$sub  = self::factory()->category->create( array( 'name' => 'Sub2', 'parent' => $top ) );
+		$urls = ( new PostUrlExpander() )->expand( Change::forUrls( 'term', array(), array( 'term_id' => $sub, 'taxonomy' => 'category' ) ) );
+		$this->assertContains( get_category_link( $top ), $urls );
+		$this->assertContains( trailingslashit( get_category_link( $sub ) ) . 'page/2/', $urls );
+		$this->assertContains( home_url( '/' ), $urls );
+	}
+
+	public function test_a_variation_change_purges_its_parent_product(): void {
+		register_post_type( 'product', array( 'public' => true, 'taxonomies' => array( 'category' ) ) );
+		register_post_type( 'product_variation', array( 'public' => false ) );
+		$cat       = self::factory()->category->create();
+		$product   = self::factory()->post->create( array( 'post_type' => 'product', 'post_status' => 'publish' ) );
+		wp_set_object_terms( $product, array( $cat ), 'category' );
+		$variation = self::factory()->post->create( array( 'post_type' => 'product_variation', 'post_status' => 'publish', 'post_parent' => $product ) );
+		$urls      = ( new PostUrlExpander() )->expand( Change::forUrls( 'post', array(), array( 'post_id' => $variation ) ) );
+		$this->assertContains( get_permalink( $product ), $urls );
+		$this->assertContains( get_category_link( $cat ), $urls );
+	}
 }
