@@ -58,7 +58,7 @@ final class CatalogTest extends TestCase {
 		$this->assertSame( $ids, array_values( array_unique( $ids ) ) );
 		$this->assertContains( 'kinsta', $ids );
 		$this->assertContains( 'wp-engine', $ids );
-		$this->assertCount( 9, $ids );
+		$this->assertCount( 16, $ids );
 	}
 
 	public function test_wp_fastest_cache_uses_class_and_action(): void {

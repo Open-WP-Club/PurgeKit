@@ -14,7 +14,7 @@ Ideas for later, roughly by value for the effort. Nothing here is started.
 - **Soft purge for Fastly.** Mark content stale instead of deleting it, so a purge does not send a burst of requests to the origin. A header in `ProviderSpecs`.
 - **Asset version bump.** A button that changes the version query string of CSS and JS, to push browsers to reload them. Browser caches cannot be purged remotely, but this works around it.
 - **REST, feed and AMP URLs** added to the URLs of a changed post (`wp-json/wp/v2/...`, comment feed, `?amp`), for headless and mobile clients. All behind the existing `purgekit_post_urls` filter.
-- **More cache plugins and hosts.** WP-Optimize, FlyingPress, Cache Enabler, Hummingbird, Swift, Comet, Pantheon, GoDaddy, Pagely, SpinupWP, Pressable/VIP, Cloudways. The plugin ones can be checked against their source; the hosts need access to verify.
+- **More cache plugins and hosts.** Still open, and why: Hummingbird (the `wphb_clear_page_cache` action exists, but what it does without an argument was not read), Comet Cache (not looked at), GoDaddy (no public source for the purge code), Pagely, Pressable and WordPress VIP (Batcache and the VIP edge functions were not checked), Cloudways beyond Breeze. Added so far: Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, SpinupWP, Pantheon.
 - **Page builders still missing:** Bricks, Oxygen.
 
 ## Rules and history

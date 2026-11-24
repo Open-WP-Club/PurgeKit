@@ -24,7 +24,7 @@ Free and open source (GPL-2.0-or-later). No paid tier, no telemetry.
 
 ### Supported layers (v0.1)
 
-Object cache, WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Nginx Helper, SiteGround, WP Engine, Kinsta, Varnish and Cloudflare.
+Object cache, PHP OPcache and APCu (opt-in), database transients (opt-in), WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, Nginx Helper, Nginx FastCGI cache, Varnish, SiteGround, WP Engine, Kinsta, SpinupWP, Pantheon, Cloudflare, Fastly, Bunny CDN, KeyCDN, Sucuri and a custom webhook. Elementor, Divi, Beaver Builder and Autoptimize files can be cleared too (opt-in).
 
 ## Install
 

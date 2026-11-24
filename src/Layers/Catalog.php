@@ -8,7 +8,8 @@ namespace PurgeKit\Layers;
  * Cache plugins and hosts that expose a plain PHP purge function or action.
  * Names were checked on 2026-11-24 against the plugin sources on wordpress.org
  * (LiteSpeed, W3TC, WP Super Cache, WP Fastest Cache, Nginx Helper, SiteGround) and
- * WP Rocket's docs. WP Engine and Kinsta are closed mu-plugins: community-documented
+ * WP Rocket's docs. Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, SpinupWP and
+ * Pantheon were added on 2026-11-25 from their public source or official docs (see each entry). WP Engine and Kinsta are closed mu-plugins: community-documented
  * only, so those rows are guarded and fail loudly instead of silently doing nothing.
  */
 final class Catalog {
@@ -128,7 +129,154 @@ final class Catalog {
 				null,
 				Fingerprint::header( 'x-kinsta-cache', '/^HIT$/i', 'Kinsta cache' )
 			),
+			// Cache Enabler: the two documented actions (keycdn.com/support/wordpress-cache-enabler-plugin), class and
+			// signature read in github.com/keycdn/cache-enabler.
+			new CallbackLayer(
+				'cache-enabler',
+				'Cache Enabler',
+				Tier::PLUGIN,
+				static fn() => class_exists( 'Cache_Enabler' ),
+				static fn() => do_action( 'cache_enabler_clear_complete_cache' ),
+				static function ( array $urls ) {
+					foreach ( $urls as $url ) {
+						do_action( 'cache_enabler_clear_page_cache_by_url', $url );
+					}
+				},
+				static fn( array $headers, string $body = '' ) => Fingerprint::header( 'x-cache-handler', '/cache-enabler-engine/i', 'Cache Enabler' )( $headers )
+					?? Fingerprint::body( '/Cache Enabler by KeyCDN/', 'Cache Enabler' )( $headers, $body )
+			),
+			// WP-Optimize: WPO_Page_Cache::purge() (read in cache/class-wpo-page-cache.php) through
+			// WP_Optimize::instance()->get_page_cache(); delete_cache_by_url() is called inside the plugin. Header and comment
+			// are quoted from cache/file-based-page-cache-functions.php.
+			new CallbackLayer(
+				'wp-optimize',
+				'WP-Optimize',
+				Tier::PLUGIN,
+				static fn() => class_exists( 'WP_Optimize' ) && defined( 'WPO_VERSION' ),
+				static function () {
+					self::wpOptimizePurge();
+				},
+				static function ( array $urls ) {
+					if ( ! is_callable( array( 'WPO_Page_Cache', 'delete_cache_by_url' ) ) ) {
+						self::wpOptimizePurge();
+						return;
+					}
+					foreach ( $urls as $url ) {
+						\WPO_Page_Cache::delete_cache_by_url( $url );
+					}
+				},
+				static fn( array $headers, string $body = '' ) => Fingerprint::header( 'wpo-cache-status', '/^cached$/i', 'WP-Optimize page cache' )( $headers )
+					?? Fingerprint::body( '/Cached by WP-Optimize/', 'WP-Optimize page cache' )( $headers, $body )
+			),
+			// FlyingPress: the documented PHP API, docs.flyingpress.com "Programmatically Purge and Preload Cache".
+			// purge_everything() also removes the optimised assets, which is what "everything" has to mean here.
+			new CallbackLayer(
+				'flyingpress',
+				'FlyingPress',
+				Tier::PLUGIN,
+				static fn() => class_exists( 'FlyingPress\\Purge' ),
+				static function () {
+					if ( ! method_exists( 'FlyingPress\\Purge', 'purge_everything' ) ) {
+						throw new \RuntimeException( 'This FlyingPress version has no Purge::purge_everything().' );
+					}
+					\FlyingPress\Purge::purge_everything();
+				},
+				static function ( array $urls ) {
+					if ( ! method_exists( 'FlyingPress\\Purge', 'purge_urls' ) ) {
+						throw new \RuntimeException( 'This FlyingPress version has no Purge::purge_urls().' );
+					}
+					\FlyingPress\Purge::purge_urls( array_values( $urls ) );
+				}
+			),
+			// Swift Performance: both calls and the HIT header and comment are verbatim in the plugin source
+			// (performance.php, modules/cache/cache.php on plugins.svn.wordpress.org).
+			new CallbackLayer(
+				'swift-performance',
+				'Swift Performance',
+				Tier::PLUGIN,
+				static fn() => class_exists( 'Swift_Performance_Cache' ),
+				static function () {
+					if ( ! method_exists( 'Swift_Performance_Cache', 'clear_all_cache' ) ) {
+						throw new \RuntimeException( 'This Swift Performance version has no clear_all_cache().' );
+					}
+					\Swift_Performance_Cache::clear_all_cache();
+				},
+				static function ( array $urls ) {
+					if ( ! method_exists( 'Swift_Performance_Cache', 'clear_permalink_cache' ) ) {
+						throw new \RuntimeException( 'This Swift Performance version has no clear_permalink_cache().' );
+					}
+					foreach ( $urls as $url ) {
+						\Swift_Performance_Cache::clear_permalink_cache( $url );
+					}
+				},
+				static fn( array $headers, string $body = '' ) => Fingerprint::header( 'swift-performance', '/^HIT$/i', 'Swift Performance' )( $headers )
+					?? Fingerprint::body( '/<!--Cached with Swift Performance-->/', 'Swift Performance' )( $headers, $body )
+			),
+			// Breeze (Cloudways): the plugin's own full clear is Breeze_PurgeCache::breeze_cache_flush( true, true, true )
+			// (inc/cache/purge-cache.php). It has no public purge-by-URL, so a URL purge clears the whole cache.
+			new CallbackLayer(
+				'breeze',
+				'Breeze',
+				Tier::PLUGIN,
+				static fn() => class_exists( 'Breeze_PurgeCache' ) && defined( 'BREEZE_VERSION' ),
+				static function () {
+					if ( ! method_exists( 'Breeze_PurgeCache', 'breeze_cache_flush' ) ) {
+						throw new \RuntimeException( 'This Breeze version has no Breeze_PurgeCache::breeze_cache_flush().' );
+					}
+					\Breeze_PurgeCache::breeze_cache_flush( true, true, true );
+				}
+			),
+			// SpinupWP: the plugin registers these two actions (src/Cache.php in github.com/spinupwp/spinupwp-plugin).
+			// Only present while the plugin is active, which is also how it is detected.
+			new CallbackLayer(
+				'spinupwp',
+				'SpinupWP',
+				Tier::HOST,
+				static fn() => (bool) has_action( 'spinupwp_purge_page_cache' ),
+				static fn() => do_action( 'spinupwp_purge_page_cache' ),
+				static function ( array $urls ) {
+					foreach ( $urls as $url ) {
+						do_action( 'spinupwp_purge_url', $url );
+					}
+				}
+			),
+			// Pantheon: functions documented in the README of github.com/pantheon-systems/pantheon-advanced-page-cache.
+			// The file that defines them was not readable, so they are only used when they exist. They take paths, not URLs.
+			new CallbackLayer(
+				'pantheon',
+				'Pantheon',
+				Tier::HOST,
+				static fn() => function_exists( 'pantheon_wp_clear_edge_all' ),
+				static fn() => pantheon_wp_clear_edge_all(),
+				static function ( array $urls ) {
+					if ( ! function_exists( 'pantheon_wp_clear_edge_paths' ) ) {
+						pantheon_wp_clear_edge_all();
+						return;
+					}
+					$paths = array();
+					foreach ( $urls as $url ) {
+						$path = (string) wp_parse_url( $url, PHP_URL_PATH );
+						if ( '' !== $path ) {
+							$paths[ $path ] = true;
+						}
+					}
+					pantheon_wp_clear_edge_paths( array_keys( $paths ) );
+				}
+			),
 		);
+	}
+
+	/**
+	 * Full page-cache purge for WP-Optimize, through the plugin's own object.
+	 *
+	 * @throws \RuntimeException When the plugin has no page cache to purge.
+	 */
+	private static function wpOptimizePurge(): void {
+		$cache = class_exists( 'WP_Optimize' ) && method_exists( 'WP_Optimize', 'instance' ) ? \WP_Optimize::instance()->get_page_cache() : null;
+		if ( ! is_object( $cache ) || ! method_exists( $cache, 'purge' ) ) {
+			throw new \RuntimeException( 'This WP-Optimize version has no page cache purge().' );
+		}
+		$cache->purge();
 	}
 
 	/**
