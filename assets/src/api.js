@@ -36,3 +36,6 @@ export const addScheduled = ( at, urls, note ) =>
 	apiFetch( { path: `${ NS }/scheduled`, method: 'POST', data: { at, urls, note } } );
 export const cancelScheduled = ( id ) =>
 	apiFetch( { path: `${ NS }/scheduled/${ id }`, method: 'DELETE' } );
+export const getSettingsExport = () => apiFetch( { path: `${ NS }/settings/export` } );
+export const importSettings = ( data ) =>
+	apiFetch( { path: `${ NS }/settings/import`, method: 'POST', data } );

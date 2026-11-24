@@ -24,6 +24,24 @@ final class SettingsController extends AbstractController {
 		);
 		register_rest_route(
 			self::NS,
+			'/settings/export',
+			array(
+				'methods'             => 'GET',
+				'callback'            => fn() => $this->services->porter->export(),
+				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/settings/import',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'import' ),
+				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/alerts/test',
 			array(
 				'methods'             => 'POST',
@@ -61,6 +79,7 @@ final class SettingsController extends AbstractController {
 			'webhook_url'          => rest_url( self::NS . '/webhook/flush' ),
 			'multisite'            => is_multisite(),
 			'overridden'           => $this->services->settings->overridden(),
+			'locked'               => $this->services->config->locked(),
 			'guard'                => array(
 				'paused'        => $this->services->guard->reason(),
 				'environment'   => wp_get_environment_type(),
@@ -92,6 +111,17 @@ final class SettingsController extends AbstractController {
 		}
 		$this->services->cron->sync();
 		return $this->get();
+	}
+
+	/** Applies a settings file made by the export. Anything that is not a PurgeKit export is refused. */
+	public function import( \WP_REST_Request $req ): array|\WP_Error {
+		$known  = array_map( static fn( $l ) => $l->id(), $this->services->registry->all() );
+		$result = $this->services->porter->import( (array) $req->get_json_params(), $known, $this->services->config->locked() );
+		if ( null === $result ) {
+			return new \WP_Error( 'purgekit_bad_import', 'This file is not a PurgeKit settings export.', array( 'status' => 400 ) );
+		}
+		$this->services->cron->sync();
+		return $result;
 	}
 
 	/** Finds the zone ID for this site's domain. Returns it without saving, so the user can review it. */

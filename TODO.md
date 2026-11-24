@@ -27,8 +27,6 @@ Ideas for later, roughly by value for the effort. Nothing here is started.
 
 ## Admin experience
 
-- **Export and import settings**, and configuration through constants in `wp-config.php`, for agencies that manage many sites.
-- **Editor sidebar.** In the block editor, show which cache layers hold the page being edited, with a purge button. Built on the inspector.
 - **First-run setup.** A short first screen that explains the modes and shows what was detected.
 
 ## Not verified yet (needs a real WordPress)
@@ -36,6 +34,7 @@ Ideas for later, roughly by value for the effort. Nothing here is started.
 - The integration tests (`bin/test-local.sh full`, needs Docker), including `UninstallerTest::test_uninstall_removes_table_options_and_cron`, which failed once in CI and was never investigated, and the multisite run.
 - The admin screen in a browser. The stylesheet was written without seeing it.
 - Real accounts: Cloudflare, Slack, Fastly, Bunny, KeyCDN, Sucuri (the API host differs between sources: `waf.` or `wafx.sucuri.net`), WP Engine and Kinsta (function names are community-documented only), the Nginx cache directory.
+- The editor sidebar panel (`assets/src/editor.js`): it builds and its component is tested, but it was never opened in the real block editor.
 - Elementor's `files_manager->clear_cache()` and Divi's `ET_Core_PageResource::remove_static_resources()`; they are guarded and fail loudly if the method is missing.
 - WPML and Polylang URL expansion, and the WooCommerce shop, upsell and variation URLs.
 - The `Contributors` names in `readme.txt` are GitHub logins, not confirmed WordPress.org usernames.

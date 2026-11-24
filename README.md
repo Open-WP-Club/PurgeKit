@@ -38,6 +38,25 @@ define( 'PURGEKIT_CLOUDFLARE_TOKEN', '...' );
 
 Keys entered in the UI are stored encrypted (libsodium) and are never shown again.
 
+### Many sites
+
+- **Export and import.** Settings → PurgeKit → Settings can download the settings and the saved rules as a JSON file and import it on another site. API tokens, webhook keys and the Slack address are never exported, and neither is the "allow purges from staging" switch.
+- **`wp-config.php`.** Fix settings for every site with one array. A fixed setting is shown in the admin but cannot be changed there:
+
+```php
+define( 'PURGEKIT_CONFIG', array(
+	'mode'               => 'auto',
+	'exclude_paths'      => array( '/cart/*', '/checkout/*' ),
+	'warm_sitemap_limit' => 10,
+) );
+```
+
+The names are the ones in the exported file. Secrets keep their own constants (`PURGEKIT_CLOUDFLARE_TOKEN`, and so on).
+
+### Editor
+
+The block editor's document sidebar has a **PurgeKit cache** panel. Press *Check caches* to see which layers serve the page to visitors, and purge one layer or the whole page from there. Nothing is requested until you press the button.
+
 ## Usage
 
 ### WP-CLI

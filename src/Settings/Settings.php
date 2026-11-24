@@ -6,6 +6,30 @@ use PurgeKit\Network\InheritingStore;
 
 /** Typed, validated accessors over the Store. Never holds secrets. */
 final class Settings {
+	/** Every setting that can be exported, imported or fixed in wp-config.php. Secrets and per-site state (home_host) are never in here. */
+	public const CONFIGURABLE = array(
+		'mode',
+		'schedule',
+		'skip_if_unchanged',
+		'warm_enabled',
+		'warm_sitemap_limit',
+		'verify_after_flush',
+		'allow_external',
+		'disabled_layers',
+		'exclude_paths',
+		'cloudflare_zone',
+		'alert_email',
+		'alert_on',
+		'varnish_enabled',
+		'opcache_enabled',
+		'apcu_enabled',
+		'transients_enabled',
+		'builder_assets_enabled',
+		'nginx_cache_path',
+		'nginx_cache_key',
+		'nginx_cache_levels',
+	);
+
 	public const MODES     = array( 'notify', 'auto', 'scheduled' );
 	public const SCHEDULES = array( 'hourly', '3h', '6h', '12h', 'daily', 'weekly' );
 

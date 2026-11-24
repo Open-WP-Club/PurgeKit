@@ -10,6 +10,7 @@ use PurgeKit\Core\Planner;
 use PurgeKit\Core\PurgePlan;
 use PurgeKit\Core\Run;
 use PurgeKit\Core\Queue;
+use PurgeKit\Core\Store;
 use PurgeKit\Core\ScheduledPurges;
 use PurgeKit\Core\RuleStore;
 use PurgeKit\Detect\FileScanner;
@@ -34,7 +35,9 @@ use PurgeKit\Layers\VarnishLayer;
 use PurgeKit\Network\InheritingStore;
 use PurgeKit\Network\NetworkDefaults;
 use PurgeKit\Secrets\Secrets;
+use PurgeKit\Settings\ConfigOverrides;
 use PurgeKit\Settings\Settings;
+use PurgeKit\Settings\SettingsPorter;
 use PurgeKit\Warm\SitemapReader;
 use PurgeKit\Warm\Warmer;
 use PurgeKit\Wp\Cron;
@@ -48,7 +51,9 @@ use PurgeKit\Wp\WpStore;
 
 /** The object graph. Built once per request by Plugin; tests build their own. */
 final class Services {
-	public WpStore $store;
+	public Store $store;
+	public ConfigOverrides $config;
+	public SettingsPorter $porter;
 	public WpHttp $http;
 	public WpLock $lock;
 	public Secrets $secrets;
@@ -69,8 +74,10 @@ final class Services {
 	public ScheduledRunner $scheduler;
 
 	public static function build(): self {
-		$s          = new self();
-		$s->store   = new WpStore();
+		$s = new self();
+		// Settings fixed in wp-config.php (PURGEKIT_CONFIG) win over what is stored.
+		$s->config  = new ConfigOverrides( new WpStore(), defined( 'PURGEKIT_CONFIG' ) && is_array( PURGEKIT_CONFIG ) ? PURGEKIT_CONFIG : array() );
+		$s->store   = $s->config;
 		$s->http    = new WpHttp();
 		$s->lock    = new WpLock();
 		$s->secrets = new Secrets( $s->store, wp_salt( 'auth' ) );
@@ -78,6 +85,7 @@ final class Services {
 		$s->settings = new Settings( is_multisite() ? new InheritingStore( $s->store, new NetworkDefaults( new NetworkStore() ) ) : $s->store );
 		$s->queue    = new Queue( $s->store );
 		$s->rules    = new RuleStore( $s->store );
+		$s->porter   = new SettingsPorter( $s->settings, $s->store, $s->rules );
 		$s->history  = new Repository();
 
 		$layers       = array_merge(

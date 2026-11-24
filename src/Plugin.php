@@ -2,6 +2,7 @@
 namespace PurgeKit;
 
 use PurgeKit\Admin\AdminBar;
+use PurgeKit\Admin\EditorPanel;
 use PurgeKit\Admin\HealthNotice;
 use PurgeKit\Admin\HistoryExport;
 use PurgeKit\Admin\Menu;
@@ -43,6 +44,7 @@ final class Plugin {
 		self::remember_home( $s );
 		$s->scheduler->register();
 		( new HealthNotice( $s ) )->register();
+		( new EditorPanel() )->register();
 		( new Notices( $s ) )->register();
 		( new Router( $s ) )->register();
 		( new Menu() )->register();

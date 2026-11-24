@@ -9,6 +9,8 @@ import History from '../components/History';
 import Inspector from '../components/Inspector';
 import Rules from '../components/Rules';
 import Scheduled from '../components/Scheduled';
+import Portability from '../components/Portability';
+import CachePanel from '../editor/CachePanel';
 
 jest.mock( '../api' );
 
@@ -478,4 +480,89 @@ test( 'Settings: the APCu, transients and builder-file switches are sent only wh
 	await userEvent.click( screen.getByLabelText( /clear page-builder and minifier files/i ) );
 	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
 	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { apcu_enabled: true, transients_enabled: true, builder_assets_enabled: true } );
+} );
+
+test( 'Settings: settings fixed in wp-config.php are listed and cannot be edited', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'auto', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		webhook_key_set: true, webhook_url: 'https://a.test/hook', providers: [], guard: { paused: null }, locked: [ 'mode', 'warm_enabled' ],
+	} );
+	render( <Settings /> );
+	expect( await screen.findByText( /set in wp-config\.php and not editable here/i ) ).toBeInTheDocument();
+	expect( screen.getByLabelText( /when something changes/i ) ).toBeDisabled();
+	expect( screen.getByLabelText( /warm the cache after a purge/i ) ).toBeDisabled();
+	expect( screen.getByLabelText( /check the home page and purged pages/i ) ).not.toBeDisabled();
+} );
+
+test( 'Export and import: imports a file, reports what was applied and refuses invalid JSON', async () => {
+	const onImported = jest.fn();
+	api.importSettings.mockResolvedValue( { applied: [ 'mode', 'schedule' ], ignored: [ 'allow_external' ], rules: 3 } );
+	const { container } = render( <Portability onImported={ onImported } /> );
+	const input = container.querySelector( 'input[type="file"]' );
+
+	const good = new File( [ JSON.stringify( { purgekit: 1, settings: { mode: 'auto' } } ) ], 'purgekit-settings.json', { type: 'application/json' } );
+	good.text = () => Promise.resolve( JSON.stringify( { purgekit: 1, settings: { mode: 'auto' } } ) );
+	await userEvent.upload( input, good );
+	expect( ( await screen.findAllByText( /2 settings applied\. 3 rules imported\. Not applied: allow_external\./i ) ).length ).toBeGreaterThan( 0 );
+	expect( api.importSettings ).toHaveBeenCalledWith( { purgekit: 1, settings: { mode: 'auto' } } );
+	expect( onImported ).toHaveBeenCalled();
+
+	const bad = new File( [ 'not json' ], 'x.json', { type: 'application/json' } );
+	bad.text = () => Promise.resolve( 'not json' );
+	await userEvent.upload( input, bad );
+	expect( ( await screen.findAllByText( /not valid json/i ) ).length ).toBeGreaterThan( 0 );
+	expect( api.importSettings ).toHaveBeenCalledTimes( 1 );
+} );
+
+test( 'Export and import: the download asks the server for the export', async () => {
+	api.getSettingsExport.mockResolvedValue( { purgekit: 1, settings: {}, providers: {}, rules: [] } );
+	global.URL.createObjectURL = jest.fn( () => 'blob:x' );
+	global.URL.revokeObjectURL = jest.fn();
+	const click = jest.spyOn( HTMLAnchorElement.prototype, 'click' ).mockImplementation( () => {} );
+	render( <Portability /> );
+	await userEvent.click( screen.getByRole( 'button', { name: /download settings/i } ) );
+	await waitFor( () => expect( api.getSettingsExport ).toHaveBeenCalledTimes( 1 ) );
+	expect( global.URL.createObjectURL ).toHaveBeenCalled();
+	expect( click ).toHaveBeenCalled();
+	click.mockRestore();
+} );
+
+test( 'Editor panel: asks nothing until the button is pressed, then shows the cache layers with a purge button each', async () => {
+	api.inspectUrl.mockResolvedValue( {
+		verdict: 'stale', url: 'https://a.test/hello/', message: 'Cloudflare is serving an out-of-date copy. Purge it.', layer: 'cloudflare',
+		served_by: [ { layer: 'cloudflare', label: 'Cloudflare', evidence: 'Cloudflare (cf-cache-status: HIT)', tier: 50 } ],
+		visitor: { status: 200, headers: {} }, fresh: { status: 200, headers: {} },
+	} );
+	api.purgeLayerUrl.mockResolvedValue( { layer: 'cloudflare', status: 'ok', message: '' } );
+	render( <CachePanel url="https://a.test/hello/" published /> );
+	expect( api.inspectUrl ).not.toHaveBeenCalled();
+
+	await userEvent.click( screen.getByRole( 'button', { name: /check caches/i } ) );
+	expect( api.inspectUrl ).toHaveBeenCalledWith( 'https://a.test/hello/' );
+	expect( ( await screen.findAllByText( /out-of-date copy/i ) ).length ).toBeGreaterThan( 0 );
+	expect( screen.getByText( /cf-cache-status: HIT/ ) ).toBeInTheDocument();
+
+	await userEvent.click( screen.getByRole( 'button', { name: /^purge$/i } ) );
+	expect( api.purgeLayerUrl ).toHaveBeenCalledWith( 'cloudflare', 'https://a.test/hello/' );
+	expect( ( await screen.findAllByText( /purged\. check again/i ) ).length ).toBeGreaterThan( 0 );
+	expect( screen.getByRole( 'button', { name: /check again/i } ) ).toBeInTheDocument();
+} );
+
+test( 'Editor panel: purges the page on every layer, and an unpublished page is not checked', async () => {
+	api.flush.mockResolvedValue( { status: 'ok', results: [] } );
+	const { unmount } = render( <CachePanel url="https://a.test/hello/" published /> );
+	await userEvent.click( screen.getByRole( 'button', { name: /purge this page/i } ) );
+	expect( api.flush ).toHaveBeenCalledWith( [ 'https://a.test/hello/' ] );
+	unmount();
+
+	render( <CachePanel url="https://a.test/?p=1" published={ false } /> );
+	expect( screen.getByText( /publish this page to check/i ) ).toBeInTheDocument();
+	expect( screen.queryByRole( 'button' ) ).not.toBeInTheDocument();
+} );
+
+test( 'Editor panel: shows an API error', async () => {
+	api.inspectUrl.mockRejectedValue( { message: 'Only pages on this site can be checked.' } );
+	render( <CachePanel url="https://a.test/hello/" published /> );
+	await userEvent.click( screen.getByRole( 'button', { name: /check caches/i } ) );
+	expect( ( await screen.findAllByText( /only pages on this site/i ) ).length ).toBeGreaterThan( 0 );
 } );

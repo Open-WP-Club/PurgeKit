@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.3
+Stable tag: 0.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -41,6 +41,9 @@ Object cache, WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fas
 * `purgekit_ignored_post_types` (filter): post types to ignore.
 * `purgekit_capability` (filter): who can manage PurgeKit (default `manage_options`).
 * API keys can be set as constants in wp-config.php, for example `define( 'PURGEKIT_CLOUDFLARE_TOKEN', '...' );`.
+* Other settings can be fixed for every site in wp-config.php with one array, for example `define( 'PURGEKIT_CONFIG', array( 'mode' => 'auto', 'exclude_paths' => array( '/cart/*' ), 'warm_sitemap_limit' => 10 ) );`. A fixed setting is shown in the admin but cannot be changed there. The names are the same as in the settings export.
+* Settings > PurgeKit > Settings can export the settings and saved rules to a file and import them on another site. API keys are never exported.
+* In the block editor, the document sidebar has a "PurgeKit cache" panel that shows which caches serve the page and purges them.
 
 == Installation ==
 
@@ -77,6 +80,11 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.1.4 =
+* New: export and import the settings and saved rules, to copy a setup between sites (API keys are never exported).
+* New: fix settings for every site in wp-config.php with `PURGEKIT_CONFIG`.
+* New: a "PurgeKit cache" panel in the block editor sidebar that shows which cache layers serve the page and purges them.
 
 = 0.1.3 =
 * New: PHP OPcache layer (opt-in): a health check and a reset when everything is purged.

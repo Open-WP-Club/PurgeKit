@@ -378,4 +378,48 @@ final class RestTest extends \WP_UnitTestCase {
 			$this->assertNull( $after['checked'], 'A layer that is not set up was not checked, so nothing is remembered.' );
 		}
 	}
+
+	public function test_settings_export_has_no_secrets_and_import_refuses_other_files(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'GET', '/settings/export' )->get_status() );
+		$this->assertSame( 403, $this->call( 'POST', '/settings/import', array( 'purgekit' => 1 ) )->get_status() );
+
+		wp_set_current_user( $this->admin );
+		$this->svc->secrets->set( 'CLOUDFLARE_TOKEN', 'TOPSECRETTOKEN' );
+		$this->call( 'POST', '/settings', array( 'mode' => 'auto', 'exclude_paths' => '/cart/*' ) );
+		$export = $this->call( 'GET', '/settings/export' )->get_data();
+		$this->assertSame( 1, $export['purgekit'] );
+		$this->assertSame( 'auto', $export['settings']['mode'] );
+		$this->assertStringNotContainsString( 'TOPSECRETTOKEN', wp_json_encode( $export ) );
+		$this->assertArrayNotHasKey( 'allow_external', $export['settings'] );
+
+		$this->assertSame( 400, $this->call( 'POST', '/settings/import', array( 'hello' => 'world' ) )->get_status() );
+	}
+
+	public function test_settings_import_applies_the_file_and_reports_what_it_skipped(): void {
+		wp_set_current_user( $this->admin );
+		$res = $this->call(
+			'POST',
+			'/settings/import',
+			array(
+				'purgekit' => 1,
+				'settings' => array( 'mode' => 'scheduled', 'schedule' => '6h', 'allow_external' => true, 'mode_typo' => 1 ),
+				'rules'    => array( array( 'name' => 'Imported', 'action' => 'home', 'layers' => array( 'object-cache', 'ghost' ) ) ),
+			)
+		);
+		$this->assertSame( 200, $res->get_status() );
+		$data = $res->get_data();
+		$this->assertContains( 'mode', $data['applied'] );
+		$this->assertContains( 'allow_external', $data['ignored'] );
+		$this->assertSame( 1, $data['rules'] );
+
+		$this->assertSame( 'scheduled', $this->call( 'GET', '/settings' )->get_data()['mode'] );
+		$this->assertFalse( $this->call( 'GET', '/settings' )->get_data()['allow_external'] );
+		$this->assertSame( array( 'object-cache' ), $this->call( 'GET', '/rules' )->get_data()['rules'][0]['layers'] );
+	}
+
+	public function test_settings_report_which_ones_are_fixed_in_wp_config(): void {
+		wp_set_current_user( $this->admin );
+		$this->assertSame( array(), $this->call( 'GET', '/settings' )->get_data()['locked'], 'Nothing is fixed unless PURGEKIT_CONFIG is defined.' );
+	}
 }

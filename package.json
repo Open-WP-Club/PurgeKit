@@ -3,8 +3,8 @@
 	"private": false,
 	"license": "GPL-2.0-or-later",
 	"scripts": {
-		"build": "wp-scripts build assets/src/index.js --output-path=build",
-		"start": "wp-scripts start assets/src/index.js --output-path=build",
+		"build": "wp-scripts build assets/src/index.js assets/src/editor.js --output-path=build",
+		"start": "wp-scripts start assets/src/index.js assets/src/editor.js --output-path=build",
 		"test:js": "wp-scripts test-unit-js --passWithNoTests",
 		"test:php-env": "wp-env run tests-cli --env-cwd=wp-content/plugins/PurgeKit vendor/bin/phpunit -c phpunit-integration.xml.dist"
 	},

@@ -2,6 +2,7 @@ import { useEffect, useState } from '@wordpress/element';
 import { Button, SelectControl, TextareaControl, TextControl, ToggleControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { getSettings, saveSettings, rotateWebhookKey, findCloudflareZone, testAlerts } from '../api';
+import Portability from './Portability';
 
 const MODES = [
 	{ value: 'notify', label: __( 'Notify me', 'purgekit' ) },
@@ -68,6 +69,9 @@ export default function Settings() {
 		setLoaded( r );
 	};
 
+	/** Fixed in wp-config.php (PURGEKIT_CONFIG): shown, but not editable here. */
+	const locked = ( key ) => ( s.locked || [] ).includes( key );
+
 	/** Only on multisite, only for keys this site overrides. */
 	const resetLink = ( key ) =>
 		s.multisite && INHERITABLE.includes( key ) && ( s.overridden || [] ).includes( key ) ? (
@@ -98,7 +102,7 @@ export default function Settings() {
 		// Only send what changed: on multisite, saving a key makes the site stop inheriting the network default.
 		const patch = {};
 		[ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'nginx_cache_path', 'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths' ].forEach( ( k ) => {
-			if ( s[ k ] !== loaded[ k ] ) {
+			if ( s[ k ] !== loaded[ k ] && ! locked( k ) ) {
 				patch[ k ] = s[ k ];
 			}
 		} );
@@ -134,17 +138,24 @@ export default function Settings() {
 
 	return (
 		<div className="purgekit-form">
-			<SelectControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'When something changes', 'purgekit' ) } value={ s.mode } options={ MODES } onChange={ set( 'mode' ) } />
+			{ ( s.locked || [] ).length > 0 && (
+				<div className="notice notice-info inline">
+					<p>
+						{ __( 'Set in wp-config.php and not editable here:', 'purgekit' ) } <code>{ s.locked.join( ', ' ) }</code>
+					</p>
+				</div>
+			) }
+			<SelectControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'When something changes', 'purgekit' ) } value={ s.mode } options={ MODES } onChange={ set( 'mode' ) } disabled={ locked( 'mode' ) } />
 			{ resetLink( 'mode' ) }
 			{ s.mode === 'scheduled' && (
 				<>
-					<SelectControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Schedule', 'purgekit' ) } value={ s.schedule } options={ SCHEDULES } onChange={ set( 'schedule' ) } />
+					<SelectControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Schedule', 'purgekit' ) } value={ s.schedule } options={ SCHEDULES } onChange={ set( 'schedule' ) } disabled={ locked( 'schedule' ) } />
 					{ resetLink( 'schedule' ) }
-					<ToggleControl __nextHasNoMarginBottom label={ __( 'Skip if nothing changed', 'purgekit' ) } checked={ s.skip_if_unchanged } onChange={ set( 'skip_if_unchanged' ) } />
+					<ToggleControl __nextHasNoMarginBottom label={ __( 'Skip if nothing changed', 'purgekit' ) } checked={ s.skip_if_unchanged } onChange={ set( 'skip_if_unchanged' ) } disabled={ locked( 'skip_if_unchanged' ) } />
 					{ resetLink( 'skip_if_unchanged' ) }
 				</>
 			) }
-			<ToggleControl __nextHasNoMarginBottom label={ __( 'Warm the cache after a purge', 'purgekit' ) } checked={ s.warm_enabled } onChange={ set( 'warm_enabled' ) } />
+			<ToggleControl __nextHasNoMarginBottom label={ __( 'Warm the cache after a purge', 'purgekit' ) } checked={ s.warm_enabled } onChange={ set( 'warm_enabled' ) } disabled={ locked( 'warm_enabled' ) } />
 			{ resetLink( 'warm_enabled' ) }
 			<TextControl
 				__nextHasNoMarginBottom
@@ -155,13 +166,14 @@ export default function Settings() {
 				max={ 100 }
 				value={ s.warm_sitemap_limit ?? 20 }
 				onChange={ ( v ) => set( 'warm_sitemap_limit' )( v === '' ? 0 : parseInt( v, 10 ) || 0 ) }
+				disabled={ locked( 'warm_sitemap_limit' ) }
 				help={ __( 'Taken from wp-sitemap.xml, own pages only. 0 turns it off, 100 is the maximum.', 'purgekit' ) }
 			/>
 			<ToggleControl
 				__nextHasNoMarginBottom
 				label={ __( 'Check the home page and purged pages after a flush', 'purgekit' ) }
 				checked={ !! s.verify_after_flush }
-				onChange={ set( 'verify_after_flush' ) }
+				onChange={ set( 'verify_after_flush' ) } disabled={ locked( 'verify_after_flush' ) }
 				help={ __( 'Fetches up to three own pages once the purge is done and records in History whether a cache layer still serves a stale copy.', 'purgekit' ) }
 			/>
 			<h3>{ __( 'Safety', 'purgekit' ) }</h3>
@@ -179,14 +191,14 @@ export default function Settings() {
 				__nextHasNoMarginBottom
 				label={ __( 'Allow CDN and firewall purges from this environment', 'purgekit' ) }
 				checked={ !! s.allow_external }
-				onChange={ set( 'allow_external' ) }
+				onChange={ set( 'allow_external' ) } disabled={ locked( 'allow_external' ) }
 				help={ __( 'Normally purges to Cloudflare, Fastly and similar are paused on staging sites and on copies of the site with a new address, so a clone cannot purge the live CDN.', 'purgekit' ) }
 			/>
 			<TextareaControl
 				__nextHasNoMarginBottom
 				label={ __( 'Never purge these paths (one per line)', 'purgekit' ) }
 				value={ s.exclude_paths || '' }
-				onChange={ set( 'exclude_paths' ) }
+				onChange={ set( 'exclude_paths' ) } disabled={ locked( 'exclude_paths' ) }
 				placeholder={ '/cart/*\n/checkout/*\n/my-account/*' }
 				help={ __( 'Applies to automatic and rule-driven purges of single pages. Start with / or *, and use * as a wildcard. “Purge everything” and pages you purge by hand are not affected.', 'purgekit' ) }
 			/>
@@ -194,37 +206,37 @@ export default function Settings() {
 				__nextHasNoMarginBottom
 				label={ __( 'Reset PHP OPcache when everything is purged', 'purgekit' ) }
 				checked={ !! s.opcache_enabled }
-				onChange={ set( 'opcache_enabled' ) }
+				onChange={ set( 'opcache_enabled' ) } disabled={ locked( 'opcache_enabled' ) }
 				help={ __( 'For when a theme or plugin changed and PHP still runs the old code. It is never reset for a single page, and it only reaches the PHP pool that runs the purge. Use “Test connection” in the layer map to see its health.', 'purgekit' ) }
 			/>
 			<ToggleControl
 				__nextHasNoMarginBottom
 				label={ __( 'Empty APCu when everything is purged', 'purgekit' ) }
 				checked={ !! s.apcu_enabled }
-				onChange={ set( 'apcu_enabled' ) }
+				onChange={ set( 'apcu_enabled' ) } disabled={ locked( 'apcu_enabled' ) }
 				help={ __( 'APCu is shared by everything on the same PHP pool, so this also drops other applications’ entries there. Only for a full purge.', 'purgekit' ) }
 			/>
 			<ToggleControl
 				__nextHasNoMarginBottom
 				label={ __( 'Delete database transients when everything is purged', 'purgekit' ) }
 				checked={ !! s.transients_enabled }
-				onChange={ set( 'transients_enabled' ) }
+				onChange={ set( 'transients_enabled' ) } disabled={ locked( 'transients_enabled' ) }
 				help={ __( 'Transients are temporary cached values that plugins rebuild on demand. With a persistent object cache they are not in the database and nothing is deleted.', 'purgekit' ) }
 			/>
 			<ToggleControl
 				__nextHasNoMarginBottom
 				label={ __( 'Clear page-builder and minifier files when everything is purged', 'purgekit' ) }
 				checked={ !! s.builder_assets_enabled }
-				onChange={ set( 'builder_assets_enabled' ) }
+				onChange={ set( 'builder_assets_enabled' ) } disabled={ locked( 'builder_assets_enabled' ) }
 				help={ __( 'Elementor and Divi CSS, Beaver Builder assets and the Autoptimize cache, for the ones that are installed. They are regenerated on the next visit, which can briefly slow the first pages.', 'purgekit' ) }
 			/>
-			<ToggleControl __nextHasNoMarginBottom label={ __( 'Varnish', 'purgekit' ) } checked={ s.varnish_enabled } onChange={ set( 'varnish_enabled' ) } />
+			<ToggleControl __nextHasNoMarginBottom label={ __( 'Varnish', 'purgekit' ) } checked={ s.varnish_enabled } onChange={ set( 'varnish_enabled' ) } disabled={ locked( 'varnish_enabled' ) } />
 			<TextControl
 				__nextHasNoMarginBottom
 				__next40pxDefaultSize
 				label={ __( 'Nginx FastCGI cache directory', 'purgekit' ) }
 				value={ s.nginx_cache_path || '' }
-				onChange={ set( 'nginx_cache_path' ) }
+				onChange={ set( 'nginx_cache_path' ) } disabled={ locked( 'nginx_cache_path' ) }
 				help={ __( 'Absolute path from fastcgi_cache_path, e.g. /var/cache/nginx. PHP needs write access. Leave empty if you do not use it.', 'purgekit' ) }
 			/>
 			{ s.nginx_cache_path && (
@@ -234,7 +246,7 @@ export default function Settings() {
 						__next40pxDefaultSize
 						label={ __( 'Nginx cache key', 'purgekit' ) }
 						value={ s.nginx_cache_key || '' }
-						onChange={ set( 'nginx_cache_key' ) }
+						onChange={ set( 'nginx_cache_key' ) } disabled={ locked( 'nginx_cache_key' ) }
 						placeholder="$scheme$request_method$host$request_uri"
 						help={ __( 'Your fastcgi_cache_key. Leave empty for the default.', 'purgekit' ) }
 					/>
@@ -243,13 +255,13 @@ export default function Settings() {
 						__next40pxDefaultSize
 						label={ __( 'Nginx cache levels', 'purgekit' ) }
 						value={ s.nginx_cache_levels || '' }
-						onChange={ set( 'nginx_cache_levels' ) }
+						onChange={ set( 'nginx_cache_levels' ) } disabled={ locked( 'nginx_cache_levels' ) }
 						placeholder="1:2"
 						help={ __( 'The levels= value from fastcgi_cache_path. Leave empty for 1:2.', 'purgekit' ) }
 					/>
 				</>
 			) }
-			<TextControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Cloudflare zone ID', 'purgekit' ) } value={ s.cloudflare_zone } onChange={ set( 'cloudflare_zone' ) } />
+			<TextControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Cloudflare zone ID', 'purgekit' ) } value={ s.cloudflare_zone } onChange={ set( 'cloudflare_zone' ) } disabled={ locked( 'cloudflare_zone' ) } />
 			<TextControl
 				__nextHasNoMarginBottom
 				__next40pxDefaultSize
@@ -267,7 +279,7 @@ export default function Settings() {
 				label={ __( 'Alert email', 'purgekit' ) }
 				type="email"
 				value={ s.alert_email || '' }
-				onChange={ set( 'alert_email' ) }
+				onChange={ set( 'alert_email' ) } disabled={ locked( 'alert_email' ) }
 				help={ __( 'Sent when a flush fails. At most one alert every 15 minutes.', 'purgekit' ) }
 			/>
 			<TextControl
@@ -295,7 +307,7 @@ export default function Settings() {
 					{ value: 'problems', label: __( 'Failed and partial flushes', 'purgekit' ) },
 					{ value: 'failed', label: __( 'Only when every layer failed', 'purgekit' ) },
 				] }
-				onChange={ set( 'alert_on' ) }
+				onChange={ set( 'alert_on' ) } disabled={ locked( 'alert_on' ) }
 			/>
 			<Button variant="secondary" onClick={ sendTest }>{ __( 'Send test alert', 'purgekit' ) }</Button>
 			{ alertMsg && <span>{ ' ' + alertMsg }</span> }
@@ -326,6 +338,15 @@ export default function Settings() {
 			<br />
 			<Button variant="primary" onClick={ save }>{ __( 'Save', 'purgekit' ) }</Button>
 			{ saved && <span>{ ' ' + __( 'Saved.', 'purgekit' ) }</span> }
+			<hr />
+			<Portability
+				onImported={ () =>
+					getSettings().then( ( r ) => {
+						setS( r );
+						setLoaded( r );
+					} )
+				}
+			/>
 			<hr />
 			<Button variant="secondary" onClick={ () => rotateWebhookKey().then( ( r ) => {
 				setKey( r.key );

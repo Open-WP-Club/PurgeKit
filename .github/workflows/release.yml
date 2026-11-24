@@ -62,6 +62,8 @@ jobs:
           unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/index.js'
           unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/index.asset.php'
           unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/style-index.css'
+          unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/editor.js'
+          unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/editor.asset.php'
 
       # Commits since the previous semver tag, without CI and test-only changes.
       - name: Release notes
