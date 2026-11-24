@@ -3,6 +3,7 @@ import { Button, SelectControl, TextareaControl, TextControl, ToggleControl } fr
 import { __ } from '@wordpress/i18n';
 import { getSettings, saveSettings, rotateWebhookKey, findCloudflareZone, testAlerts } from '../api';
 import Portability from './Portability';
+import CloudflareTools from './CloudflareTools';
 
 const MODES = [
 	{ value: 'notify', label: __( 'Notify me', 'purgekit' ) },
@@ -338,6 +339,12 @@ export default function Settings() {
 			<br />
 			<Button variant="primary" onClick={ save }>{ __( 'Save', 'purgekit' ) }</Button>
 			{ saved && <span>{ ' ' + __( 'Saved.', 'purgekit' ) }</span> }
+			{ s.cloudflare_token_set && s.cloudflare_zone && (
+				<>
+					<hr />
+					<CloudflareTools />
+				</>
+			) }
 			<hr />
 			<Portability
 				onImported={ () =>

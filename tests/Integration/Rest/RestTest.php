@@ -422,4 +422,15 @@ final class RestTest extends \WP_UnitTestCase {
 		wp_set_current_user( $this->admin );
 		$this->assertSame( array(), $this->call( 'GET', '/settings' )->get_data()['locked'], 'Nothing is fixed unless PURGEKIT_CONFIG is defined.' );
 	}
+
+	public function test_cloudflare_actions_need_capability_and_a_set_up_layer(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'GET', '/cloudflare/status' )->get_status() );
+		$this->assertSame( 403, $this->call( 'POST', '/cloudflare/purge', array( 'tags' => array( 'a' ) ) )->get_status() );
+
+		wp_set_current_user( $this->admin );
+		$this->assertSame( 409, $this->call( 'GET', '/cloudflare/status' )->get_status(), 'No token and zone yet.' );
+		$this->assertSame( 409, $this->call( 'POST', '/cloudflare/development-mode', array( 'enabled' => true ) )->get_status() );
+		$this->assertSame( 409, $this->call( 'POST', '/cloudflare/purge', array( 'prefixes' => array( 'example.com/blog/' ) ) )->get_status() );
+	}
 }

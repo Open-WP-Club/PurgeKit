@@ -38,6 +38,10 @@ define( 'PURGEKIT_CLOUDFLARE_TOKEN', '...' );
 
 Keys entered in the UI are stored encrypted (libsodium) and are never shown again.
 
+### Cloudflare extras
+
+With Cloudflare set up, Settings → PurgeKit → Settings has a **Cloudflare tools** panel: purge by URL prefix (`example.com/blog/`) or by cache tag (all plans), switch **development mode** on or off (it ends by itself after three hours), and see whether **Automatic Platform Optimization** is on. Development mode and the APO status need a token that can also read zone settings; the purge works with a purge-only token.
+
 ### Many sites
 
 - **Export and import.** Settings → PurgeKit → Settings can download the settings and the saved rules as a JSON file and import it on another site. API tokens, webhook keys and the Slack address are never exported, and neither is the "allow purges from staging" switch.

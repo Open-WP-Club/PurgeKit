@@ -11,6 +11,7 @@ import Rules from '../components/Rules';
 import Scheduled from '../components/Scheduled';
 import Portability from '../components/Portability';
 import CachePanel from '../editor/CachePanel';
+import CloudflareTools from '../components/CloudflareTools';
 
 jest.mock( '../api' );
 
@@ -565,4 +566,50 @@ test( 'Editor panel: shows an API error', async () => {
 	render( <CachePanel url="https://a.test/hello/" published /> );
 	await userEvent.click( screen.getByRole( 'button', { name: /check caches/i } ) );
 	expect( ( await screen.findAllByText( /only pages on this site/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+test( 'Cloudflare tools: nothing is requested until a button is pressed; shows development mode and APO', async () => {
+	api.getCloudflareStatus.mockResolvedValue( {
+		development_mode: { ok: true, on: true, seconds_left: 5400, message: '' },
+		apo: { ok: true, enabled: true, wp_plugin: false, hostnames: [ 'a.test' ], message: '' },
+	} );
+	api.setCloudflareDevMode.mockResolvedValue( { ok: true, on: false, seconds_left: 0, message: '' } );
+	render( <CloudflareTools /> );
+	expect( api.getCloudflareStatus ).not.toHaveBeenCalled();
+
+	await userEvent.click( screen.getByRole( 'button', { name: /check cloudflare status/i } ) );
+	expect( await screen.findByText( /on, 1h 30m left/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /plugin for wordpress is not installed/i ) ).toBeInTheDocument();
+
+	await userEvent.click( screen.getByRole( 'button', { name: /turn off/i } ) );
+	expect( api.setCloudflareDevMode ).toHaveBeenCalledWith( false );
+	expect( await screen.findByRole( 'button', { name: /turn on for 3 hours/i } ) ).toBeInTheDocument();
+} );
+
+test( 'Cloudflare tools: purges by prefix and tag, one entry per line, and shows a failure', async () => {
+	api.cloudflarePurge.mockResolvedValueOnce( { status: 'ok', results: [ { layer: 'cloudflare', status: 'ok', message: 'Purged 2 prefixes.' } ] } );
+	api.cloudflarePurge.mockResolvedValueOnce( { status: 'failed', results: [ { layer: 'cloudflare', status: 'failed', message: 'Rate limited' } ] } );
+	render( <CloudflareTools /> );
+	const button = screen.getByRole( 'button', { name: /^purge$/i } );
+	expect( button ).toBeDisabled();
+
+	await userEvent.type( screen.getByLabelText( /url prefixes/i ), 'example.com/blog/{enter}example.com/shop/' );
+	await userEvent.type( screen.getByLabelText( /cache tags/i ), 'post-1' );
+	await userEvent.click( button );
+	expect( api.cloudflarePurge ).toHaveBeenCalledWith( [ 'example.com/blog/', 'example.com/shop/' ], [ 'post-1' ] );
+	expect( ( await screen.findAllByText( /^purged\.$/i ) ).length ).toBeGreaterThan( 0 );
+
+	await userEvent.click( screen.getByRole( 'button', { name: /^purge$/i } ) );
+	expect( ( await screen.findAllByText( /rate limited/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+test( 'Cloudflare tools: an unavailable setting shows the reason', async () => {
+	api.getCloudflareStatus.mockResolvedValue( {
+		development_mode: { ok: false, on: false, seconds_left: 0, message: 'Authentication error (needs Zone Settings)' },
+		apo: { ok: false, enabled: false, wp_plugin: false, hostnames: [], message: 'Authentication error (needs Zone Settings)' },
+	} );
+	render( <CloudflareTools /> );
+	await userEvent.click( screen.getByRole( 'button', { name: /check cloudflare status/i } ) );
+	expect( ( await screen.findAllByText( /needs zone settings/i ) ).length ).toBe( 2 );
+	expect( screen.queryByRole( 'button', { name: /turn on for 3 hours/i } ) ).not.toBeInTheDocument();
 } );

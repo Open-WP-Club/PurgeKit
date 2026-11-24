@@ -133,4 +133,98 @@ final class CloudflareLayerTest extends TestCase {
 		$this->assertNull( $r['zone'] );
 		$this->assertCount( 0, $this->http->requests );
 	}
+
+	private function json( array $result, bool $success = true, int $status = 200 ): HttpResponse {
+		return new HttpResponse( $status, json_encode( array( 'success' => $success, 'result' => $result, 'errors' => array() ) ) );
+	}
+
+	public function test_purge_by_prefix_sends_prefixes_without_scheme_and_drops_bad_ones(): void {
+		$l = $this->layer();
+		$r = $l->purgeBy( 'prefixes', array( 'https://Example.com/blog/', 'example.com/shop/', 'example.com/a?x=1', 'example.com/b#frag', 'bad prefix', '', 5, 'example.com/blog/' ) );
+		$this->assertSame( LayerResult::OK, $r->status );
+		$this->assertSame( 'Purged 2 prefixes.', $r->message );
+		$req = $this->http->requests[0];
+		$this->assertSame( 'https://api.cloudflare.com/client/v4/zones/zone123/purge_cache', $req['url'] );
+		$this->assertSame( array( 'prefixes' => array( 'example.com/blog/', 'example.com/shop/' ) ), json_decode( $req['args']['body'], true ) );
+	}
+
+	public function test_purge_by_tag_and_host_and_the_100_per_request_limit(): void {
+		$l = $this->layer();
+		$l->purgeBy( 'tags', array( 'post-1', 'term 5', 'a,b', 'term-5' ) );
+		$this->assertSame( array( 'tags' => array( 'post-1', 'term-5' ) ), json_decode( $this->http->requests[0]['args']['body'], true ) );
+
+		$l->purgeBy( 'hosts', array( 'WWW.Example.com', 'bad host' ) );
+		$this->assertSame( array( 'hosts' => array( 'www.example.com' ) ), json_decode( $this->http->requests[1]['args']['body'], true ) );
+
+		$many = array_map( static fn( $i ) => "tag-$i", range( 1, 250 ) );
+		$l->purgeBy( 'tags', $many );
+		$this->assertCount( 5, $this->http->requests, '250 tags are sent as 100 + 100 + 50, after the two earlier calls.' );
+		$this->assertCount( 100, json_decode( $this->http->requests[2]['args']['body'], true )['tags'] );
+		$this->assertCount( 50, json_decode( $this->http->requests[4]['args']['body'], true )['tags'] );
+	}
+
+	public function test_purge_by_refuses_when_nothing_valid_is_left_and_makes_no_request(): void {
+		$l = $this->layer();
+		$r = $l->purgeBy( 'prefixes', array( 'https://example.com/?q=1', ' ' ) );
+		$this->assertSame( LayerResult::FAILED, $r->status );
+		$this->assertSame( array(), $this->http->requests );
+	}
+
+	public function test_rate_limit_and_token_are_reported_safely(): void {
+		$l = $this->layer();
+		$this->http->queue( new HttpResponse( 429, json_encode( array( 'success' => false, 'errors' => array( array( 'message' => 'Rate limited for SECRET_TOKEN' ) ) ) ) ) );
+		$r = $l->purgeBy( 'tags', array( 'a' ) );
+		$this->assertSame( LayerResult::FAILED, $r->status );
+		$this->assertStringContainsString( '5 a minute', $r->message );
+		$this->assertStringNotContainsString( 'SECRET_TOKEN', $r->message );
+	}
+
+	public function test_development_mode_reads_and_sets_with_a_per_setting_call(): void {
+		$l = $this->layer();
+		$this->http->queue( $this->json( array( 'value' => 'on', 'time_remaining' => 7200 ) ) );
+		$on = $l->developmentMode();
+		$this->assertTrue( $on['ok'] );
+		$this->assertTrue( $on['on'] );
+		$this->assertSame( 7200, $on['seconds_left'] );
+		$this->assertSame( 'GET', $this->http->requests[0]['method'] );
+		$this->assertSame( 'https://api.cloudflare.com/client/v4/zones/zone123/settings/development_mode', $this->http->requests[0]['url'] );
+
+		$this->http->queue( $this->json( array( 'value' => 'off', 'time_remaining' => -500 ) ) );
+		$off = $l->developmentMode( false );
+		$this->assertFalse( $off['on'] );
+		$this->assertSame( 0, $off['seconds_left'] );
+		$this->assertSame( 'PATCH', $this->http->requests[1]['method'] );
+		$this->assertSame( array( 'value' => 'off' ), json_decode( $this->http->requests[1]['args']['body'], true ) );
+
+		$l->developmentMode( true );
+		$this->assertSame( array( 'value' => 'on' ), json_decode( $this->http->requests[2]['args']['body'], true ) );
+	}
+
+	public function test_development_mode_that_was_never_switched_on_reads_as_off(): void {
+		$l = $this->layer();
+		$this->http->queue( $this->json( array( 'value' => 'off', 'time_remaining' => false ) ) );
+		$this->assertSame( 0, $l->developmentMode()['seconds_left'] );
+	}
+
+	public function test_a_token_without_the_settings_permission_gets_a_clear_hint(): void {
+		$l = $this->layer();
+		$this->http->queue( new HttpResponse( 403, json_encode( array( 'success' => false, 'errors' => array( array( 'message' => 'Authentication error' ) ) ) ) ) );
+		$r = $l->developmentMode( true );
+		$this->assertFalse( $r['ok'] );
+		$this->assertStringContainsString( 'Authentication error', $r['message'] );
+		$this->assertStringContainsString( 'Zone Settings', $r['message'] );
+	}
+
+	public function test_apo_status_is_read_only(): void {
+		$l = $this->layer();
+		$this->http->queue( $this->json( array( 'id' => 'automatic_platform_optimization', 'value' => array( 'enabled' => true, 'cf' => true, 'wordpress' => true, 'wp_plugin' => false, 'hostnames' => array( 'example.com' ) ) ) ) );
+		$apo = $l->apoStatus();
+		$this->assertTrue( $apo['ok'] );
+		$this->assertTrue( $apo['enabled'] );
+		$this->assertFalse( $apo['wp_plugin'] );
+		$this->assertSame( array( 'example.com' ), $apo['hostnames'] );
+		$this->assertCount( 1, $this->http->requests );
+		$this->assertSame( 'GET', $this->http->requests[0]['method'] );
+		$this->assertStringEndsWith( '/settings/automatic_platform_optimization', $this->http->requests[0]['url'] );
+	}
 }

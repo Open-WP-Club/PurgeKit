@@ -10,7 +10,7 @@ Ideas for later, roughly by value for the effort. Nothing here is started.
 
 ## Purging
 
-- **More Cloudflare actions.** Purge by prefix or tag (only on plans that support it), development mode (temporarily bypasses the cache), Cloudflare APO.
+- **Cloudflare APO switching.** The APO status is shown read-only. Turning it on or off needs the whole APO configuration, so it stays in the Cloudflare dashboard for now.
 - **More CDNs.** CloudFront (needs AWS SigV4 request signing), Akamai, Azure CDN, Google Cloud CDN. Needs real accounts to verify, so do these last.
 - **Cache-tag purging** (Fastly surrogate keys first): send `Cache-Tag` / `Surrogate-Key` headers and purge by tag instead of by URL. Cloudflare only supports tags on Enterprise, so it would fall back to URLs there.
 - **Soft purge for Fastly.** Mark content stale instead of deleting it, so a purge does not send a burst of requests to the origin. A header in `ProviderSpecs`.

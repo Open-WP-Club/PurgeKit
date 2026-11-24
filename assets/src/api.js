@@ -39,3 +39,8 @@ export const cancelScheduled = ( id ) =>
 export const getSettingsExport = () => apiFetch( { path: `${ NS }/settings/export` } );
 export const importSettings = ( data ) =>
 	apiFetch( { path: `${ NS }/settings/import`, method: 'POST', data } );
+export const getCloudflareStatus = () => apiFetch( { path: `${ NS }/cloudflare/status` } );
+export const setCloudflareDevMode = ( enabled ) =>
+	apiFetch( { path: `${ NS }/cloudflare/development-mode`, method: 'POST', data: { enabled } } );
+export const cloudflarePurge = ( prefixes, tags ) =>
+	apiFetch( { path: `${ NS }/cloudflare/purge`, method: 'POST', data: { prefixes, tags } } );
