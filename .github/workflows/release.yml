@@ -1,0 +1,86 @@
+name: Build & Release
+
+# Push a plain semver tag to publish a release, e.g.  git tag 0.2.0 && git push origin 0.2.0
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+
+      # Dev dependencies are needed to run the checks; bin/build-zip.sh installs production ones itself.
+      - run: composer install --no-progress --no-interaction
+      - name: Checks
+        run: |
+          composer lint
+          composer analyse
+          composer test
+          pnpm run test:js
+
+      # The tag is the version: stamp it into the plugin so the zip always matches the release.
+      - name: Stamp version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          sed -i "s/^ \* Version:.*/ * Version:           $TAG/" purgekit.php
+          sed -i "s/define( 'PURGEKIT_VERSION'.*/define( 'PURGEKIT_VERSION', '$TAG' );/" purgekit.php
+          sed -i "s/^Stable tag:.*/Stable tag: $TAG/" readme.txt
+          grep -q " \* Version:           $TAG\$" purgekit.php
+          grep -q "define( 'PURGEKIT_VERSION', '$TAG' );" purgekit.php
+          grep -q "^Stable tag: $TAG\$" readme.txt
+
+      - name: Build zip
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          bin/build-zip.sh
+          mv purgekit.zip "purgekit-$TAG.zip"
+          # Fail the release if dev files slipped into the archive.
+          if unzip -l "purgekit-$TAG.zip" | grep -E 'tests/|node_modules|\.github|phpunit|phpcs|composer\.(json|lock)'; then
+            echo "Dev files found in the zip" >&2
+            exit 1
+          fi
+          unzip -l "purgekit-$TAG.zip" | grep -q 'purgekit/build/index.js'
+
+      # Commits since the previous semver tag, without CI and test-only changes.
+      - name: Release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          PREV=$(git tag --sort=-version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '2p')
+          RANGE=${PREV:+$PREV..}HEAD
+          {
+            echo "## PurgeKit $TAG"
+            echo
+            git log --pretty=format:'- %s' "$RANGE" -- . ':!.github' ':!tests'
+            echo
+            echo
+            echo "### Installation"
+            echo "Download \`purgekit-$TAG.zip\` and upload it via **Plugins → Add New → Upload Plugin**."
+          } > release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" "purgekit-$TAG.zip" --title "$TAG" --notes-file release-notes.md

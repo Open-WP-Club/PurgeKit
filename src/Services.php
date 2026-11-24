@@ -1,0 +1,113 @@
+<?php
+namespace PurgeKit;
+
+use PurgeKit\Alerts\Notifier;
+use PurgeKit\Core\Executor;
+use PurgeKit\Core\Flusher;
+use PurgeKit\Core\Planner;
+use PurgeKit\Core\PurgePlan;
+use PurgeKit\Core\Run;
+use PurgeKit\Core\Queue;
+use PurgeKit\Core\RuleStore;
+use PurgeKit\Detect\FileScanner;
+use PurgeKit\Detect\PostUrlExpander;
+use PurgeKit\History\Repository;
+use PurgeKit\Inspector\Inspector;
+use PurgeKit\Inspector\Verifier;
+use PurgeKit\Layers\ApiLayer;
+use PurgeKit\Layers\Catalog;
+use PurgeKit\Layers\CloudflareLayer;
+use PurgeKit\Layers\NginxFastcgiLayer;
+use PurgeKit\Layers\ObjectCacheLayer;
+use PurgeKit\Layers\ProviderSpecs;
+use PurgeKit\Layers\Registry;
+use PurgeKit\Layers\VarnishLayer;
+use PurgeKit\Network\InheritingStore;
+use PurgeKit\Network\NetworkDefaults;
+use PurgeKit\Secrets\Secrets;
+use PurgeKit\Settings\Settings;
+use PurgeKit\Warm\SitemapReader;
+use PurgeKit\Warm\Warmer;
+use PurgeKit\Wp\Cron;
+use PurgeKit\Wp\WpClock;
+use PurgeKit\Wp\WpHttp;
+use PurgeKit\Wp\WpMailer;
+use PurgeKit\Wp\WpLock;
+use PurgeKit\Wp\NetworkStore;
+use PurgeKit\Wp\WpStore;
+
+/** The object graph. Built once per request by Plugin; tests build their own. */
+final class Services {
+	public WpStore $store;
+	public WpHttp $http;
+	public WpLock $lock;
+	public Secrets $secrets;
+	public Settings $settings;
+	public Queue $queue;
+	public RuleStore $rules;
+	public Registry $registry;
+	public Repository $history;
+	public FileScanner $scanner;
+	public Flusher $flusher;
+	public Cron $cron;
+	public Warmer $warmer;
+	public Inspector $inspector;
+	public Verifier $verifier;
+	public Notifier $notifier;
+
+	public static function build(): self {
+		$s          = new self();
+		$s->store   = new WpStore();
+		$s->http    = new WpHttp();
+		$s->lock    = new WpLock();
+		$s->secrets = new Secrets( $s->store, wp_salt( 'auth' ) );
+		// On multisite, sites inherit network defaults for the non-secret behaviour settings.
+		$s->settings = new Settings( is_multisite() ? new InheritingStore( $s->store, new NetworkDefaults( new NetworkStore() ) ) : $s->store );
+		$s->queue    = new Queue( $s->store );
+		$s->rules    = new RuleStore( $s->store );
+		$s->history  = new Repository();
+
+		$layers       = array_merge(
+			array( new ObjectCacheLayer() ),
+			Catalog::callbackLayers(),
+			array(
+				new VarnishLayer( $s->http, $s->store, home_url() ),
+				new NginxFastcgiLayer( $s->store ),
+				new CloudflareLayer( $s->http, $s->secrets, $s->store ),
+			),
+			array_map( static fn( array $spec ) => new ApiLayer( $spec, $s->http, $s->secrets, $s->store ), array_values( ProviderSpecs::all() ) )
+		);
+		$layers       = apply_filters( 'purgekit_layers', $layers );
+		$s->registry  = new Registry( is_array( $layers ) ? $layers : array() );
+		$s->inspector = new Inspector( $s->http, $s->registry, new WpClock() );
+		$s->verifier  = new Verifier( new Inspector( $s->http, $s->registry, new WpClock(), 5 ), home_url( '/' ) );
+
+		$s->warmer   = new Warmer( $s->http, $s->store, home_url( '/' ), 5, static fn() => (array) apply_filters( 'purgekit_preload_urls', array() ), new SitemapReader( $s->http, home_url( '/' ), (array) apply_filters( 'purgekit_sitemap_paths', SitemapReader::PATHS ) ) );
+		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );
+		$s->flusher  = new Flusher(
+			$s->queue,
+			new Planner( new PostUrlExpander(), home_url() ),
+			new Executor( $s->registry, new WpClock() ),
+			$s->lock,
+			$s->history,
+			static function ( PurgePlan $plan ) use ( $s ) {
+				if ( ! $s->settings->warmEnabled() ) {
+					return;
+				}
+				$s->warmer->enqueue( $plan, $s->settings->warmSitemapLimit() );
+				if ( ! wp_next_scheduled( 'purgekit_warm' ) ) {
+					wp_schedule_single_event( time() + 5, 'purgekit_warm' );
+				}
+			},
+			static fn( string $source, Run $run ) => $s->notifier->notify( $source, $run ),
+			$s->rules,
+			static fn( Run $run ) => $s->settings->verifyAfterFlush() ? $s->verifier->verify( $run ) : null
+		);
+
+		$dirs       = apply_filters( 'purgekit_fingerprint_dirs', array( get_theme_root(), WP_PLUGIN_DIR ) );
+		$exts       = apply_filters( 'purgekit_fingerprint_extensions', array( 'php', 'js', 'css', 'json', 'html' ) );
+		$s->scanner = new FileScanner( $s->store, (array) $dirs, (array) $exts );
+		$s->cron    = new Cron( $s->settings, $s->flusher, $s->queue, $s->scanner, $s->history );
+		return $s;
+	}
+}

@@ -1,0 +1,6 @@
+.superpowers/
+vendor/
+node_modules/
+build/
+*.zip
+.phpunit.result.cache

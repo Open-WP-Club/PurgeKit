@@ -1,0 +1,19 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+parameters:
+    scanFiles:
+        - vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    level: 6
+    paths:
+        - src
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        - '#no value type specified in iterable type array#'
+        -
+            path: src/Layers/Catalog.php
+            identifiers:
+                - function.notFound
+                - class.notFound
+                - function.impossibleType
