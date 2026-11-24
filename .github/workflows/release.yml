@@ -83,4 +83,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" "purgekit-$TAG.zip" --title "$TAG" --notes-file release-notes.md
+          # A release created by hand in the GitHub UI already exists when the tag push arrives: attach the zip to it.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "purgekit-$TAG.zip" --clobber
+          else
+            gh release create "$TAG" "purgekit-$TAG.zip" --title "$TAG" --notes-file release-notes.md
+          fi
