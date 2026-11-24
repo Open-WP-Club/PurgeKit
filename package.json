@@ -1,0 +1,20 @@
+{
+	"name": "purgekit",
+	"private": true,
+	"license": "GPL-2.0-or-later",
+	"scripts": {
+		"build": "wp-scripts build assets/src/index.js --output-path=build",
+		"start": "wp-scripts start assets/src/index.js --output-path=build",
+		"test:js": "wp-scripts test-unit-js --passWithNoTests",
+		"test:php-env": "wp-env run tests-cli --env-cwd=wp-content/plugins/PurgeKit vendor/bin/phpunit -c phpunit-integration.xml.dist"
+	},
+	"devDependencies": {
+		"@wordpress/env": "^10.0.0",
+		"@wordpress/scripts": "^30.0.0",
+		"@wordpress/components": "^28",
+		"@wordpress/api-fetch": "^7",
+		"@testing-library/react": "^16",
+		"@testing-library/jest-dom": "*",
+		"@testing-library/user-event": "*"
+	}
+}
