@@ -74,4 +74,26 @@ final class CloudflareLayerTest extends TestCase {
 		$this->assertSame( LayerResult::FAILED, $r->status );
 		$this->assertCount( 2, $this->http->requests );
 	}
+
+	public function test_test_skips_when_undetected(): void {
+		$this->assertSame( LayerResult::SKIPPED, $this->layer( false )->test()->status );
+		$this->assertCount( 0, $this->http->requests );
+	}
+
+	public function test_test_calls_zone_endpoint_read_only(): void {
+		$l = $this->layer();
+		$r = $l->test();
+		$this->assertSame( LayerResult::OK, $r->status );
+		$this->assertSame( 'GET', $this->http->requests[0]['method'] );
+		$this->assertSame( 'https://api.cloudflare.com/client/v4/zones/zone123', $this->http->requests[0]['url'] );
+		$this->assertSame( 'Bearer SECRET_TOKEN', $this->http->requests[0]['args']['headers']['Authorization'] );
+	}
+
+	public function test_test_reports_failure_without_token(): void {
+		$l = $this->layer();
+		$this->http->queue( new HttpResponse( 403, '{"success":false,"errors":[{"message":"Invalid SECRET_TOKEN"}]}' ) );
+		$r = $l->test();
+		$this->assertSame( LayerResult::FAILED, $r->status );
+		$this->assertStringNotContainsString( 'SECRET_TOKEN', $r->message );
+	}
 }

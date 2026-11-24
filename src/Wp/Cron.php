@@ -35,6 +35,12 @@ final class Cron {
 		add_action( self::FLUSH, array( $this, 'run_flush' ) );
 		add_action( self::SCAN, array( $this, 'run_scan' ) );
 		add_action( self::PRUNE, array( $this, 'run_prune' ) );
+		// Pick up mode/schedule changes made outside the settings UI (WP-CLI, direct option writes).
+		foreach ( array( 'mode', 'schedule' ) as $key ) {
+			$option = WpStore::PREFIX . $key;
+			add_action( "update_option_$option", array( $this, 'sync' ) );
+			add_action( "add_option_$option", array( $this, 'sync' ) );
+		}
 	}
 
 	public function schedules( array $schedules ): array {

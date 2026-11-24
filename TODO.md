@@ -8,7 +8,13 @@ v0.1 is implemented and merged: change detection, queue, planner, ordered execut
 
 Verified before the PHP floor change: 71 PHP unit tests, 57 integration tests (`wp-env`), 7 Jest tests, PHPCS and PHPStan clean, CI green on PHP 8.0 and 8.3.
 
-## Just changed (needs a CI check)
+## Done on branch v0.1.1-hardening
+
+- CI confirmed green on PHP 8.2 to 8.6 (the PHP floor change is verified).
+- Cloudflare `test()` now does a read-only `GET /zones/{id}` (token redacted from errors); closes the API half of item 5 below. The UI "Test connection" button is still missing.
+- `Cron::sync()` also runs when the `mode` or `schedule` option is added or updated, so item 7 is fixed.
+
+## Previously changed (verified, kept for history)
 
 - Minimum PHP raised to **8.2**; supported range is **8.2 to 8.6**. `composer.json` (`require` + `platform` 8.2.30), plugin header, `readme.txt`, CI matrix (8.2 to 8.6) and docs updated. Unit tests, PHPCS and PHPStan pass locally on PHP 8.6.
 - Check that CI can install PHP 8.5/8.6 with `shivammathur/setup-php`. If a version is unavailable, drop it from the matrix and note it here.
@@ -20,9 +26,9 @@ Verified before the PHP floor change: 71 PHP unit tests, 57 integration tests (`
 2. **Built zip was never smoke-tested in WordPress.** `bin/build-zip.sh` builds a good zip, but the install, activate, `wp purgekit status|flush` check was interrupted (see incident below). Redo it by copying the zip to a path outside the repo.
 3. **No final whole-branch code review** was run (the plan calls for one after the last task).
 4. **React UI never viewed in a browser.** Only Jest tests exist. Check layout, the tab panel and the Settings form manually (`npx wp-env start`, http://localhost:8888/wp-admin, Settings → PurgeKit).
-5. **Cloudflare**: zone ID must be typed in; no zone lookup from the domain, no "Test connection" button in the UI yet (the REST endpoint `POST /layers/{id}/test` exists, but the default `test()` only reports detected/not detected, it does not call the API).
+5. **Cloudflare**: zone ID must be typed in; no zone lookup from the domain, no "Test connection" button in the UI yet (REST `POST /layers/{id}/test` works and now calls the API).
 6. **Webhook key** is shown only once after create/rotate; the UI does not display the full webhook URL.
-7. `Cron::sync()` runs on `admin_init` and on settings save only. A mode change made outside the UI is picked up at the next admin page load.
+7. ~~`Cron::sync()` only on admin_init~~ fixed: also hooked to mode/schedule option changes.
 8. **Multisite** is not implemented (`Uninstaller` loops over sites but is untested). Planned for v0.3.
 9. `readme.txt` still has placeholders: `Contributors: purgekit`, `Tested up to: 6.8`.
 10. Warming is sequential (5 URLs per batch), not parallel.
