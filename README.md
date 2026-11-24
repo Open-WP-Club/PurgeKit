@@ -82,8 +82,6 @@ curl -X POST https://example.com/wp-json/purgekit/v1/webhook/flush \
 
 REST-first. `src/Core` is plain PHP with no WordPress calls (Change → Queue → Planner → Executor → Flusher) behind small interfaces (`Store`, `Http`, `Lock`, `Clock`), so it is unit-tested with fakes. WordPress-specific code lives in adapters (`src/Wp`, `src/Detect`, `src/Rest`, `src/Cli`, `src/Admin`). The React app in `assets/src` only talks to `/wp-json/purgekit/v1`.
 
-Design and plan: [`docs/superpowers/specs`](docs/superpowers/specs) and [`docs/superpowers/plans`](docs/superpowers/plans).
-
 ## Development
 
 ```bash
