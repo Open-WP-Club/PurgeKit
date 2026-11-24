@@ -5,6 +5,31 @@ final class Menu {
 	public function register(): void {
 		add_action( 'admin_menu', array( $this, 'add_page' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( PURGEKIT_FILE ), array( $this, 'action_links' ) );
+		add_action( 'admin_init', array( $this, 'activation_redirect' ) );
+	}
+
+	/** A "Settings" link next to Deactivate on the Plugins screen. */
+	public function action_links( array $links ): array {
+		$url = esc_url( self::url() );
+		return array_merge( array( '<a href="' . $url . '">' . esc_html__( 'Settings', 'purgekit' ) . '</a>' ), $links );
+	}
+
+	public static function url(): string {
+		return admin_url( 'options-general.php?page=purgekit' );
+	}
+
+	/** Takes the person who just activated the plugin straight to its screen (not for bulk or network activation). */
+	public function activation_redirect(): void {
+		if ( ! get_transient( 'purgekit_activation_redirect' ) ) {
+			return;
+		}
+		delete_transient( 'purgekit_activation_redirect' );
+		if ( wp_doing_ajax() || is_network_admin() || isset( $_GET['activate-multi'] ) || ! current_user_can( apply_filters( 'purgekit_capability', 'manage_options' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		wp_safe_redirect( self::url() );
+		exit;
 	}
 
 	public function add_page(): void {

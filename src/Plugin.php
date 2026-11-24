@@ -104,6 +104,7 @@ final class Plugin {
 			return;
 		}
 		self::activate_site( self::services() );
+		set_transient( 'purgekit_activation_redirect', 1, 30 );
 	}
 
 	/** Per-site setup: history table, webhook key, scheduled events. */
