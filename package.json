@@ -16,5 +16,8 @@
 		"@testing-library/react": "^16",
 		"@testing-library/jest-dom": "*",
 		"@testing-library/user-event": "*"
+	},
+	"overrides": {
+		"@wordpress/private-apis": "3.2.0"
 	}
 }
