@@ -14,7 +14,8 @@ use PurgeKit\Secrets\Secrets;
  *
  * Placeholders in url, headers and body: `{NAME}` is a secret (UPPER_CASE) or a setting (lower_case),
  * `{basic:NAME}` is base64("secret:") for HTTP Basic auth, `{url}`, `{url_noscheme}` and `{url_encoded}`
- * are the page being purged. A body element that is exactly `{urls_noscheme}` expands to the batch's URL list.
+ * are the page being purged. A body element that is exactly `{urls_noscheme}` or `{urls}` expands to the batch's URL list
+ * (without or with the scheme).
  */
 final class ApiLayer extends AbstractLayer implements ServesFromCache {
 	/** @param array<string, mixed> $spec */
@@ -105,7 +106,11 @@ final class ApiLayer extends AbstractLayer implements ServesFromCache {
 					$args['headers']['Content-Type'] = 'application/json';
 				}
 			}
-			$response = $this->http->request( (string) $req['method'], (string) $this->fill( (string) $req['url'], $context, $urls ), $args );
+			$target = (string) $this->fill( (string) $req['url'], $context, $urls );
+			if ( 1 !== preg_match( '#^https?://[^\s/]+#i', $target ) ) {
+				return $this->fail( 'The address is not a valid http(s) URL.' );
+			}
+			$response = $this->http->request( (string) $req['method'], $target, $args );
 		} catch ( HttpException $e ) {
 			return $this->fail( $this->redact( $e->getMessage() ) );
 		}
@@ -160,7 +165,11 @@ final class ApiLayer extends AbstractLayer implements ServesFromCache {
 				$out[ $k ] = array_map( static fn( $u ) => (string) preg_replace( '#^https?://#i', '', $u ), $urls );
 				continue;
 			}
-			$out[ $k ] = $this->fill( $v, $ctx, $urls );
+			if ( '{urls}' === $v ) {
+				$out[ $k ] = array_values( $urls );
+				continue;
+			}
+			$out[ $k ] = is_string( $v ) || is_array( $v ) ? $this->fill( $v, $ctx, $urls ) : $v; // true, false and numbers stay as they are.
 		}
 		return $out;
 	}

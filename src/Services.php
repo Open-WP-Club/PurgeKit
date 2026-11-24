@@ -20,7 +20,11 @@ use PurgeKit\Inspector\Verifier;
 use PurgeKit\Layers\ApiLayer;
 use PurgeKit\Layers\Catalog;
 use PurgeKit\Layers\CloudflareLayer;
+use PurgeKit\Layers\ApcuLayer;
 use PurgeKit\Layers\NginxFastcgiLayer;
+use PurgeKit\Layers\PhpApcu;
+use PurgeKit\Layers\TransientsLayer;
+use PurgeKit\Layers\WpTransients;
 use PurgeKit\Layers\OpcacheLayer;
 use PurgeKit\Layers\PhpOpcache;
 use PurgeKit\Layers\ObjectCacheLayer;
@@ -77,8 +81,14 @@ final class Services {
 		$s->history  = new Repository();
 
 		$layers       = array_merge(
-			array( new OpcacheLayer( $s->store, new PhpOpcache() ), new ObjectCacheLayer() ),
+			array(
+				new OpcacheLayer( $s->store, new PhpOpcache() ),
+				new ApcuLayer( $s->store, new PhpApcu() ),
+				new TransientsLayer( $s->store, new WpTransients() ),
+				new ObjectCacheLayer(),
+			),
 			Catalog::callbackLayers(),
+			Catalog::assetLayers( static fn() => (bool) $s->store->get( 'builder_assets_enabled', false ) ),
 			array(
 				new VarnishLayer( $s->http, $s->store, home_url() ),
 				new NginxFastcgiLayer( $s->store ),

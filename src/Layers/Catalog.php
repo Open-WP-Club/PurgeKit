@@ -130,4 +130,78 @@ final class Catalog {
 			),
 		);
 	}
+
+	/**
+	 * Files that page builders and minifiers generate (CSS, JS). They are not tied to one page, so they
+	 * are only cleared when everything is purged, and only when the site owner switched this on.
+	 *
+	 * Autoptimize (`autoptimizeCache::clearall()`, the call its own WP-CLI command makes) and Beaver Builder
+	 * (`FLBuilderModel::delete_asset_cache_for_all_posts()`, recommended by its support) were confirmed in
+	 * community sources on 2026-11-24. Elementor's `files_manager->clear_cache()` and Divi's
+	 * `ET_Core_PageResource::remove_static_resources()` are from memory and public snippets, not from
+	 * documentation. Each call is guarded and throws when the method is missing, so a mistake shows as a
+	 * failed layer instead of silently doing nothing.
+	 *
+	 * @param callable(): bool $enabled
+	 * @return CallbackLayer[]
+	 */
+	public static function assetLayers( callable $enabled ): array {
+		$layer = static fn( string $id, string $label, callable $installed, callable $clear ) => new CallbackLayer(
+			$id,
+			$label,
+			Tier::PLUGIN,
+			static fn() => $enabled() && $installed(),
+			$clear,
+			null,
+			null,
+			true
+		);
+		return array(
+			$layer(
+				'elementor-files',
+				'Elementor CSS files',
+				static fn() => class_exists( '\\Elementor\\Plugin' ),
+				static function () {
+					$plugin = \Elementor\Plugin::$instance ?? null;
+					if ( ! is_object( $plugin ) || ! is_object( $plugin->files_manager ?? null ) || ! method_exists( $plugin->files_manager, 'clear_cache' ) ) {
+						throw new \RuntimeException( 'This Elementor version has no files_manager->clear_cache().' );
+					}
+					$plugin->files_manager->clear_cache();
+				}
+			),
+			$layer(
+				'divi-static',
+				'Divi static CSS',
+				static fn() => class_exists( 'ET_Core_PageResource' ),
+				static function () {
+					if ( ! method_exists( 'ET_Core_PageResource', 'remove_static_resources' ) ) {
+						throw new \RuntimeException( 'This Divi version has no ET_Core_PageResource::remove_static_resources().' );
+					}
+					\ET_Core_PageResource::remove_static_resources( 'all', 'all' );
+				}
+			),
+			$layer(
+				'beaver-builder-assets',
+				'Beaver Builder assets',
+				static fn() => class_exists( 'FLBuilderModel' ),
+				static function () {
+					if ( ! method_exists( 'FLBuilderModel', 'delete_asset_cache_for_all_posts' ) ) {
+						throw new \RuntimeException( 'This Beaver Builder version has no FLBuilderModel::delete_asset_cache_for_all_posts().' );
+					}
+					\FLBuilderModel::delete_asset_cache_for_all_posts();
+				}
+			),
+			$layer(
+				'autoptimize',
+				'Autoptimize cache',
+				static fn() => class_exists( 'autoptimizeCache' ),
+				static function () {
+					if ( ! method_exists( 'autoptimizeCache', 'clearall' ) ) {
+						throw new \RuntimeException( 'This Autoptimize version has no autoptimizeCache::clearall().' );
+					}
+					\autoptimizeCache::clearall();
+				}
+			),
+		);
+	}
 }

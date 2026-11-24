@@ -20,7 +20,8 @@ final class CallbackLayer extends AbstractLayer implements ServesFromCache {
 		callable $detect,
 		callable $purge_all,
 		?callable $purge_urls = null,
-		?callable $fingerprint = null
+		?callable $fingerprint = null,
+		private bool $all_only = false
 	) {
 		$this->fingerprint = $fingerprint;
 		$this->detect      = $detect;
@@ -51,6 +52,9 @@ final class CallbackLayer extends AbstractLayer implements ServesFromCache {
 	}
 
 	public function purgeUrls( array $urls ): LayerResult {
+		if ( $this->all_only ) {
+			return new LayerResult( $this->id, LayerResult::SKIPPED, 'Only cleared when everything is purged.' );
+		}
 		if ( null === $this->purge_urls ) {
 			return $this->purgeAll();
 		}

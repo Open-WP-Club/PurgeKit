@@ -13,7 +13,7 @@ final class ProviderSpecs {
 		return array(
 			// Fastly purging API: https://www.fastly.com/documentation/reference/api/purging/
 			// Checked against the vendor docs on 2026-11-24.
-			'fastly' => array(
+			'fastly'  => array(
 				'id'          => 'fastly',
 				'label'       => 'Fastly',
 				'tier'        => Tier::CDN,
@@ -54,7 +54,7 @@ final class ProviderSpecs {
 			),
 			// Bunny docs: https://docs.bunny.net/api-reference/core/pull-zone/purge-cache and .../core/purge/purge-url
 			// Checked against the vendor docs on 2026-11-24.
-			'bunny'  => array(
+			'bunny'   => array(
 				'id'          => 'bunny',
 				'label'       => 'Bunny CDN',
 				'tier'        => Tier::CDN,
@@ -95,7 +95,7 @@ final class ProviderSpecs {
 			),
 			// KeyCDN API: https://www.keycdn.com/api (purge is limited to 1 request per second, so URLs go in batches).
 			// Checked against the vendor docs on 2026-11-24.
-			'keycdn' => array(
+			'keycdn'  => array(
 				'id'          => 'keycdn',
 				'label'       => 'KeyCDN',
 				'tier'        => Tier::CDN,
@@ -137,7 +137,7 @@ final class ProviderSpecs {
 				),
 			),
 			// Sucuri documents only a whole-cache clear; the API host differs between sources (waf / wafx), so confirm on a real account.
-			'sucuri' => array(
+			'sucuri'  => array(
 				'id'          => 'sucuri',
 				'label'       => 'Sucuri Firewall',
 				'tier'        => Tier::CDN,
@@ -170,6 +170,47 @@ final class ProviderSpecs {
 					'pattern' => '/HIT/i',
 				),
 			),
+			// A generic outgoing webhook, for anything without its own layer: a headless front end (Next.js
+			// revalidation, a Netlify or Vercel deploy hook), a custom CDN, an internal service. The URL is a
+			// secret because it often carries a token. Not tied to a vendor, so there are no docs to verify against.
+			'webhook' => array(
+				'id'       => 'webhook',
+				'label'    => 'Custom webhook',
+				'tier'     => Tier::CDN,
+				'secrets'  => array( 'PURGE_WEBHOOK_URL' ),
+				'settings' => array(),
+				'fields'   => array(
+					array(
+						'key'     => 'PURGE_WEBHOOK_URL',
+						'kind'    => 'secret',
+						'label'   => 'Webhook URL (https://..., may contain a token)',
+						'pattern' => '#^https?://[^\s/]+\S*$#i',
+					),
+				),
+				'all'      => array(
+					'method' => 'POST',
+					'url'    => '{PURGE_WEBHOOK_URL}',
+					'body'   => array(
+						'event' => 'purge',
+						'all'   => true,
+					),
+				),
+				'url'      => array(
+					'method' => 'POST',
+					'url'    => '{PURGE_WEBHOOK_URL}',
+					'batch'  => 100,
+					'body'   => array(
+						'event' => 'purge',
+						'all'   => false,
+						'urls'  => '{urls}',
+					),
+				),
+				'test'     => array(
+					'method' => 'POST',
+					'url'    => '{PURGE_WEBHOOK_URL}',
+					'body'   => array( 'event' => 'test' ),
+				),
+			),
 		);
 	}
 
@@ -182,5 +223,17 @@ final class ProviderSpecs {
 			}
 		}
 		return $out;
+	}
+
+	/** Whether a value may be saved for a field; a field without a `pattern` accepts anything. */
+	public static function accepts( string $key, string $value ): bool {
+		foreach ( self::all() as $spec ) {
+			foreach ( $spec['fields'] as $f ) {
+				if ( $f['key'] === $key && isset( $f['pattern'] ) ) {
+					return 1 === preg_match( (string) $f['pattern'], $value );
+				}
+			}
+		}
+		return true;
 	}
 }

@@ -37,7 +37,14 @@ final class ApiLayerTest extends TestCase {
 			}
 			foreach ( array( 'all', 'url', 'test' ) as $part ) {
 				if ( isset( $spec[ $part ] ) ) {
-					$this->assertStringStartsWith( 'https://', $spec[ $part ]['url'], "$id $part must use https" );
+					$url = $spec[ $part ]['url'];
+					if ( str_starts_with( $url, '{' ) ) {
+						// The address is supplied by the site owner, so the field itself must insist on http(s).
+						$field = array_values( array_filter( $spec['fields'], static fn( $f ) => '{' . $f['key'] . '}' === $url ) )[0] ?? array();
+						$this->assertNotEmpty( $field['pattern'] ?? '', "$id $part takes a user URL, so its field needs a pattern" );
+					} else {
+						$this->assertStringStartsWith( 'https://', $url, "$id $part must use https" );
+					}
 				}
 			}
 			$this->assertSame( array(), array_intersect( array_keys( ProviderSpecs::writableFields() ), array() ) );
@@ -139,5 +146,45 @@ final class ApiLayerTest extends TestCase {
 		$this->assertNull( $f->servedFrom( array( 'x-cache' => 'HIT' ) ), 'x-cache alone is not specific to Fastly.' );
 		$this->assertNotNull( $this->layer( 'bunny' )->servedFrom( array( 'cdn-cache' => 'HIT' ) ) );
 		$this->assertNull( $this->layer( 'bunny' )->servedFrom( array( 'cdn-cache' => 'MISS' ) ) );
+	}
+
+	public function test_custom_webhook_posts_the_event_and_the_full_urls(): void {
+		$l = $this->layer( 'webhook', array( 'PURGE_WEBHOOK_URL' => 'https://front.test/api/revalidate?token=T0KEN' ) );
+		$this->assertTrue( $l->detect() );
+
+		$this->assertSame( LayerResult::OK, $l->purgeAll()->status );
+		$req = $this->http->requests[0];
+		$this->assertSame( 'POST', $req['method'] );
+		$this->assertSame( 'https://front.test/api/revalidate?token=T0KEN', $req['url'] );
+		$this->assertSame( array( 'event' => 'purge', 'all' => true ), json_decode( $req['args']['body'], true ) );
+
+		$this->assertSame( LayerResult::OK, $l->purgeUrls( array( 'https://a.test/x/', 'https://a.test/y/' ) )->status );
+		$this->assertSame(
+			array( 'event' => 'purge', 'all' => false, 'urls' => array( 'https://a.test/x/', 'https://a.test/y/' ) ),
+			json_decode( $this->http->requests[1]['args']['body'], true )
+		);
+	}
+
+	public function test_custom_webhook_batches_urls_and_hides_the_token_in_errors(): void {
+		$l    = $this->layer( 'webhook', array( 'PURGE_WEBHOOK_URL' => 'https://front.test/hook?token=T0KEN' ) );
+		$urls = array_map( static fn( $i ) => "https://a.test/$i/", range( 1, 250 ) );
+		$l->purgeUrls( $urls );
+		$this->assertCount( 3, $this->http->requests );
+		$this->assertCount( 100, json_decode( $this->http->requests[0]['args']['body'], true )['urls'] );
+
+		$this->http->queue( new \PurgeKit\Core\HttpException( 'cURL error: could not connect to https://front.test/hook?token=T0KEN' ) );
+		$r = $l->purgeAll();
+		$this->assertSame( LayerResult::FAILED, $r->status );
+		$this->assertStringNotContainsString( 'T0KEN', $r->message );
+	}
+
+	public function test_custom_webhook_refuses_a_non_http_address_and_makes_no_request(): void {
+		$l = $this->layer( 'webhook', array( 'PURGE_WEBHOOK_URL' => 'file:///etc/passwd' ) );
+		$r = $l->purgeAll();
+		$this->assertSame( LayerResult::FAILED, $r->status );
+		$this->assertSame( array(), $this->http->requests );
+		$this->assertFalse( \PurgeKit\Layers\ProviderSpecs::accepts( 'PURGE_WEBHOOK_URL', 'ftp://x.test/a' ) );
+		$this->assertTrue( \PurgeKit\Layers\ProviderSpecs::accepts( 'PURGE_WEBHOOK_URL', 'https://x.test/a?t=1' ) );
+		$this->assertTrue( \PurgeKit\Layers\ProviderSpecs::accepts( 'FASTLY_TOKEN', 'anything' ) );
 	}
 }

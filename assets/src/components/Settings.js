@@ -97,7 +97,7 @@ export default function Settings() {
 	const save = async () => {
 		// Only send what changed: on multisite, saving a key makes the site stop inheriting the network default.
 		const patch = {};
-		[ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone', 'varnish_enabled', 'opcache_enabled', 'nginx_cache_path', 'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths' ].forEach( ( k ) => {
+		[ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'nginx_cache_path', 'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths' ].forEach( ( k ) => {
 			if ( s[ k ] !== loaded[ k ] ) {
 				patch[ k ] = s[ k ];
 			}
@@ -196,6 +196,27 @@ export default function Settings() {
 				checked={ !! s.opcache_enabled }
 				onChange={ set( 'opcache_enabled' ) }
 				help={ __( 'For when a theme or plugin changed and PHP still runs the old code. It is never reset for a single page, and it only reaches the PHP pool that runs the purge. Use “Test connection” in the layer map to see its health.', 'purgekit' ) }
+			/>
+			<ToggleControl
+				__nextHasNoMarginBottom
+				label={ __( 'Empty APCu when everything is purged', 'purgekit' ) }
+				checked={ !! s.apcu_enabled }
+				onChange={ set( 'apcu_enabled' ) }
+				help={ __( 'APCu is shared by everything on the same PHP pool, so this also drops other applications’ entries there. Only for a full purge.', 'purgekit' ) }
+			/>
+			<ToggleControl
+				__nextHasNoMarginBottom
+				label={ __( 'Delete database transients when everything is purged', 'purgekit' ) }
+				checked={ !! s.transients_enabled }
+				onChange={ set( 'transients_enabled' ) }
+				help={ __( 'Transients are temporary cached values that plugins rebuild on demand. With a persistent object cache they are not in the database and nothing is deleted.', 'purgekit' ) }
+			/>
+			<ToggleControl
+				__nextHasNoMarginBottom
+				label={ __( 'Clear page-builder and minifier files when everything is purged', 'purgekit' ) }
+				checked={ !! s.builder_assets_enabled }
+				onChange={ set( 'builder_assets_enabled' ) }
+				help={ __( 'Elementor and Divi CSS, Beaver Builder assets and the Autoptimize cache, for the ones that are installed. They are regenerated on the next visit, which can briefly slow the first pages.', 'purgekit' ) }
 			/>
 			<ToggleControl __nextHasNoMarginBottom label={ __( 'Varnish', 'purgekit' ) } checked={ s.varnish_enabled } onChange={ set( 'varnish_enabled' ) } />
 			<TextControl

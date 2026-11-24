@@ -151,6 +151,9 @@ final class SettingsController extends AbstractController {
 				continue;
 			}
 			$value = trim( $value );
+			if ( '' !== $value && ! ProviderSpecs::accepts( (string) $key, $value ) ) {
+				continue; // Not a valid value for this field (for example a webhook that is not an http(s) URL).
+			}
 			if ( 'secret' === $writable[ $key ] ) {
 				if ( '' !== $value ) {
 					$this->services->secrets->set( $key, $value );

@@ -441,3 +441,18 @@ test( 'Settings: the OPcache switch is sent only when changed', async () => {
 	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
 	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { opcache_enabled: true } );
 } );
+
+test( 'Settings: the APCu, transients and builder-file switches are sent only when changed', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		apcu_enabled: false, transients_enabled: false, builder_assets_enabled: false,
+		webhook_key_set: true, webhook_url: 'https://a.test/hook', providers: [], guard: { paused: null },
+	} );
+	api.saveSettings.mockResolvedValue( {} );
+	render( <Settings /> );
+	await userEvent.click( await screen.findByLabelText( /empty apcu when everything is purged/i ) );
+	await userEvent.click( screen.getByLabelText( /delete database transients when everything is purged/i ) );
+	await userEvent.click( screen.getByLabelText( /clear page-builder and minifier files/i ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
+	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { apcu_enabled: true, transients_enabled: true, builder_assets_enabled: true } );
+} );
