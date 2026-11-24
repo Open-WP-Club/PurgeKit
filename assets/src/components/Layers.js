@@ -1,129 +1,194 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { getLayers, purgeLayer, setLayerEnabled, testLayer } from '../api';
 
 const STATUS_LABEL = {
 	ok: __( 'OK', 'purgekit' ),
 	failed: __( 'Failed', 'purgekit' ),
 	partial: __( 'Partial', 'purgekit' ),
+	skipped: __( 'Skipped', 'purgekit' ),
+};
+const TONE = { ok: 'ok', failed: 'bad', partial: 'warn', skipped: 'muted' };
+
+/** History stores a GMT string, connection checks a unix time. */
+const toDate = ( at ) => ( typeof at === 'number' ? new Date( at * 1000 ) : new Date( String( at ).replace( ' ', 'T' ) + 'Z' ) );
+
+const ago = ( at ) => {
+	const d = toDate( at );
+	if ( Number.isNaN( d.getTime() ) ) {
+		return '';
+	}
+	const seconds = Math.round( ( d.getTime() - Date.now() ) / 1000 );
+	const rtf = new Intl.RelativeTimeFormat( undefined, { numeric: 'auto' } );
+	for ( const [ unit, size ] of [ [ 'day', 86400 ], [ 'hour', 3600 ], [ 'minute', 60 ] ] ) {
+		if ( Math.abs( seconds ) >= size ) {
+			return rtf.format( Math.round( seconds / size ), unit );
+		}
+	}
+	return rtf.format( 0, 'second' );
 };
 
-const when = ( at ) => {
-	const d = new Date( at.replace( ' ', 'T' ) + 'Z' ); // History stores GMT.
-	return Number.isNaN( d.getTime() ) ? at : d.toLocaleString();
-};
+function Badge( { tone, children } ) {
+	return <span className={ `purgekit-badge is-${ tone }` }>{ children }</span>;
+}
+
+/** One line such as "Last purge: OK · 2 hours ago · message". */
+function Outcome( { label, result, empty } ) {
+	return (
+		<div className="purgekit-layer__line">
+			<span className="purgekit-layer__label">{ label }</span>
+			{ result ? (
+				<>
+					<Badge tone={ TONE[ result.status ] || 'muted' }>{ STATUS_LABEL[ result.status ] || result.status }</Badge>
+					{ result.at ? <span className="purgekit-layer__when">{ ago( result.at ) }</span> : null }
+					{ result.message ? <span className="purgekit-layer__msg">{ result.message }</span> : null }
+				</>
+			) : (
+				<span className="purgekit-layer__when">{ empty }</span>
+			) }
+		</div>
+	);
+}
+
+function Layer( { l, check, working, onAct, onToggle } ) {
+	const off = l.enabled === false;
+	return (
+		<li className="purgekit-layer">
+			<span className="purgekit-layer__order" title={ __( 'Purge order', 'purgekit' ) }>{ l.order }</span>
+			<div className="purgekit-layer__main">
+				<div className="purgekit-layer__name">
+					<strong>{ l.label }</strong>
+					{ off && <Badge tone="muted">{ __( 'Switched off', 'purgekit' ) }</Badge> }
+					{ ! off && l.paused && (
+						<span title={ l.paused }>
+							<Badge tone="warn">{ __( 'Paused (see Settings)', 'purgekit' ) }</Badge>
+						</span>
+					) }
+				</div>
+				<Outcome label={ __( 'Last purge', 'purgekit' ) } result={ l.last } empty={ __( 'No purge recorded yet', 'purgekit' ) } />
+				<Outcome label={ __( 'Last check', 'purgekit' ) } result={ check } empty={ __( 'Not checked yet', 'purgekit' ) } />
+			</div>
+			<div className="purgekit-layer__actions">
+				<Button variant="secondary" size="small" isBusy={ working === 'test' } disabled={ !! working } onClick={ () => onAct( l.id, 'test' ) }>
+					{ __( 'Test connection', 'purgekit' ) }
+				</Button>
+				<Button variant="tertiary" size="small" isBusy={ working === 'purge' } disabled={ !! working || off } onClick={ () => onAct( l.id, 'purge' ) }>
+					{ __( 'Purge this layer', 'purgekit' ) }
+				</Button>
+				<Button variant="tertiary" size="small" isBusy={ working === 'toggle' } disabled={ !! working } onClick={ () => onToggle( l.id, off ) }>
+					{ off ? __( 'Switch on', 'purgekit' ) : __( 'Switch off', 'purgekit' ) }
+				</Button>
+			</div>
+		</li>
+	);
+}
 
 export default function Layers() {
 	const [ layers, setLayers ] = useState( [] );
 	const [ busy, setBusy ] = useState( {} );
-	const [ results, setResults ] = useState( {} );
+	const [ checks, setChecks ] = useState( {} );
+	const [ refreshing, setRefreshing ] = useState( false );
+	const [ checkingAll, setCheckingAll ] = useState( false );
 
-	const load = () => getLayers().then( setLayers );
+	const load = async () => {
+		setRefreshing( true );
+		try {
+			setLayers( await getLayers() );
+		} finally {
+			setRefreshing( false );
+		}
+	};
 	useEffect( () => {
 		load();
 	}, [] );
+
+	const act = async ( id, kind ) => {
+		setBusy( ( b ) => ( { ...b, [ id ]: kind } ) );
+		try {
+			if ( kind === 'test' ) {
+				const res = await testLayer( id );
+				setChecks( ( c ) => ( { ...c, [ id ]: { status: res.status, message: res.message, at: res.at || Math.floor( Date.now() / 1000 ) } } ) );
+			} else {
+				await purgeLayer( id );
+				await load(); // The purge is in the history now, so the last-purge line updates.
+			}
+		} catch ( e ) {
+			setChecks( ( c ) => ( { ...c, [ id ]: { status: 'failed', message: e.message, at: Math.floor( Date.now() / 1000 ) } } ) );
+		}
+		setBusy( ( b ) => ( { ...b, [ id ]: null } ) );
+	};
 
 	const toggle = async ( id, enabled ) => {
 		setBusy( ( b ) => ( { ...b, [ id ]: 'toggle' } ) );
 		try {
 			setLayers( await setLayerEnabled( id, enabled ) );
 		} catch ( e ) {
-			setResults( ( r ) => ( { ...r, [ id ]: { kind: 'toggle', status: 'failed', message: e.message } } ) );
+			setChecks( ( c ) => ( { ...c, [ id ]: { status: 'failed', message: e.message, at: Math.floor( Date.now() / 1000 ) } } ) );
 		}
 		setBusy( ( b ) => ( { ...b, [ id ]: null } ) );
 	};
 
-	const act = async ( id, kind ) => {
-		setBusy( ( b ) => ( { ...b, [ id ]: kind } ) );
-		try {
-			const res = kind === 'test' ? await testLayer( id ) : await purgeLayer( id );
-			// A purge returns a whole run; this layer's own line is the one to show.
-			const line = kind === 'purge' ? res.results?.find( ( r ) => r.layer === id ) || { status: res.status, message: '' } : res;
-			setResults( ( r ) => ( { ...r, [ id ]: { kind, ...line } } ) );
-			if ( kind === 'purge' ) {
-				load();
-			}
-		} catch ( e ) {
-			setResults( ( r ) => ( { ...r, [ id ]: { kind, status: 'failed', message: e.message } } ) );
-		}
-		setBusy( ( b ) => ( { ...b, [ id ]: null } ) );
+	const detected = layers.filter( ( l ) => l.detected );
+	const missing = layers.filter( ( l ) => ! l.detected );
+
+	const checkAll = async () => {
+		setCheckingAll( true );
+		await Promise.all( detected.map( ( l ) => act( l.id, 'test' ) ) );
+		setCheckingAll( false );
 	};
 
-	// Closest to the visitor first, which is the order a request travels.
-	const shown = [ ...layers ].sort( ( a, b ) => b.tier - a.tier );
+	// Groups run from the visitor inwards (CDN first), the order a request travels.
+	const groups = [];
+	[ ...detected ].sort( ( a, b ) => b.tier - a.tier ).forEach( ( l ) => {
+		const name = l.tier_label || __( 'Other', 'purgekit' );
+		let g = groups.find( ( x ) => x.name === name );
+		if ( ! g ) {
+			g = { name, layers: [] };
+			groups.push( g );
+		}
+		g.layers.push( l );
+	} );
 
 	return (
-		<div>
+		<div className="purgekit-layers">
 			<p>
 				{ __( 'A visitor’s request passes the layers from top to bottom; the first one holding a copy answers. PurgeKit purges from the bottom up (1, 2, 3…), so a layer never refills from one that still holds the old copy.', 'purgekit' ) }
 			</p>
-			<table className="widefat striped">
-				<thead>
-					<tr>
-						<th>{ __( 'Purge order', 'purgekit' ) }</th>
-						<th>{ __( 'Layer', 'purgekit' ) }</th>
-						<th>{ __( 'State', 'purgekit' ) }</th>
-						<th>{ __( 'Last purge', 'purgekit' ) }</th>
-						<th>{ __( 'Actions', 'purgekit' ) }</th>
-					</tr>
-				</thead>
-				<tbody>
-					{ shown.map( ( l ) => {
-						const r = results[ l.id ];
-						const working = busy[ l.id ];
-						return (
-							<tr key={ l.id }>
-								<td>{ l.order ?? '—' }</td>
-								<td>
-									{ l.label }
-									<br />
-									<small>{ l.tier_label }</small>
-								</td>
-								<td>
-									{ l.detected ? __( 'Detected', 'purgekit' ) : __( 'Not detected', 'purgekit' ) }
-									{ l.enabled === false && <div>{ __( 'Switched off', 'purgekit' ) }</div> }
-									{ l.paused && l.enabled !== false && <div title={ l.paused }>{ __( 'Paused (see Settings)', 'purgekit' ) }</div> }
-								</td>
-								<td>
-									{ l.last ? (
-										<span>
-											<strong>{ STATUS_LABEL[ l.last.status ] || l.last.status }</strong>
-											{ ' · ' + when( l.last.at ) }
-											{ l.last.message ? ` · ${ l.last.message }` : '' }
-										</span>
-									) : (
-										__( 'No purge recorded yet', 'purgekit' )
-									) }
-								</td>
-								<td>
-									{ l.detected && (
-										<>
-											<Button variant="secondary" size="small" isBusy={ working === 'test' } disabled={ !! working } onClick={ () => act( l.id, 'test' ) }>
-												{ __( 'Test connection', 'purgekit' ) }
-											</Button>{ ' ' }
-											<Button variant="tertiary" size="small" isBusy={ working === 'purge' } disabled={ !! working || l.enabled === false } onClick={ () => act( l.id, 'purge' ) }>
-												{ __( 'Purge this layer', 'purgekit' ) }
-											</Button>{ ' ' }
-										</>
-									) }
-									{ l.detected && (
-										<Button variant="tertiary" size="small" isBusy={ working === 'toggle' } disabled={ !! working } onClick={ () => toggle( l.id, l.enabled === false ) }>
-											{ l.enabled === false ? __( 'Switch on', 'purgekit' ) : __( 'Switch off', 'purgekit' ) }
-										</Button>
-									) }
-									{ r && ! working && (
-										<div>
-											{ r.kind === 'purge' ? __( 'Purge: ', 'purgekit' ) : '' }
-											{ r.status === 'ok' ? r.message || __( 'OK', 'purgekit' ) : r.message || r.status }
-										</div>
-									) }
-								</td>
-							</tr>
-						);
-					} ) }
-				</tbody>
-			</table>
+			<div className="purgekit-layers__bar">
+				<Button variant="secondary" isBusy={ checkingAll } disabled={ checkingAll || detected.length === 0 } onClick={ checkAll }>
+					{ __( 'Check all connections', 'purgekit' ) }
+				</Button>
+				<Button variant="tertiary" isBusy={ refreshing } disabled={ refreshing } onClick={ load }>
+					{ __( 'Refresh', 'purgekit' ) }
+				</Button>
+				<span className="purgekit-layer__when">
+					{ __( 'Detection runs when this page loads and is local only. A connection is checked when you press a button, not by itself.', 'purgekit' ) }
+				</span>
+			</div>
+			{ groups.map( ( g ) => (
+				<section key={ g.name } className="purgekit-layers__group">
+					<h3>{ g.name }</h3>
+					<ul className="purgekit-layer-list">
+						{ g.layers.map( ( l ) => (
+							<Layer key={ l.id } l={ l } check={ checks[ l.id ] || l.checked } working={ busy[ l.id ] } onAct={ act } onToggle={ toggle } />
+						) ) }
+					</ul>
+				</section>
+			) ) }
+			{ detected.length === 0 && layers.length > 0 && <p>{ __( 'No cache layer was detected yet. Set one up in Settings.', 'purgekit' ) }</p> }
+			{ missing.length > 0 && (
+				<details className="purgekit-layers__missing">
+					<summary>{ sprintf( /* translators: %d: number of layers */ __( 'Not detected (%d)', 'purgekit' ), missing.length ) }</summary>
+					<ul>
+						{ missing.map( ( l ) => (
+							<li key={ l.id }>
+								{ l.label } <small>{ l.tier_label }</small>
+							</li>
+						) ) }
+					</ul>
+				</details>
+			) }
 		</div>
 	);
 }

@@ -157,3 +157,153 @@
 .purgekit .components-button + .components-button {
 	margin-left: 4px;
 }
+
+/* Layer map */
+.purgekit-layers__bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	margin: 16px 0 4px;
+}
+
+.purgekit-layers__group h3 {
+	margin: 20px 0 8px;
+	padding-top: 0;
+	border-top: 0;
+	color: #50575e;
+	font-size: 12px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.purgekit-layer-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-layer {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding: 14px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-layer:first-child {
+	border-top: 0;
+}
+
+.purgekit-layer__order {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: #f0f0f1;
+	color: #1d2327;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 26px;
+	text-align: center;
+}
+
+.purgekit-layer__main {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.purgekit-layer__name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.purgekit-layer__line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+	margin-top: 4px;
+}
+
+.purgekit-layer__label {
+	min-width: 84px;
+	color: #50575e;
+}
+
+.purgekit-layer__when {
+	color: #646970;
+}
+
+.purgekit-layer__msg {
+	color: #3c434a;
+	overflow-wrap: anywhere;
+}
+
+.purgekit-layer__actions {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 4px;
+}
+
+.purgekit-badge {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 10px;
+	background: #f0f0f1;
+	color: #3c434a;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 18px;
+}
+
+.purgekit-badge.is-ok {
+	background: #edfaef;
+	color: #00450c;
+}
+
+.purgekit-badge.is-bad {
+	background: #fcf0f1;
+	color: #8a2424;
+}
+
+.purgekit-badge.is-warn {
+	background: #fcf9e8;
+	color: #6d4b00;
+}
+
+.purgekit-layers__missing {
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-layers__missing ul {
+	columns: 2;
+	margin: 10px 0 0 18px;
+	list-style: disc;
+}
+
+.purgekit-layers__missing small {
+	color: #646970;
+}
+
+@media (max-width: 782px) {
+	.purgekit-layer {
+		flex-wrap: wrap;
+	}
+
+	.purgekit-layer__actions {
+		justify-content: flex-start;
+		width: 100%;
+	}
+
+	.purgekit-layers__missing ul {
+		columns: 1;
+	}
+}

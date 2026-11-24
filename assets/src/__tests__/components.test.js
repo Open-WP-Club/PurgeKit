@@ -32,16 +32,16 @@ test( 'Status shows an error when the flush is locked', async () => {
 	expect( ( await screen.findAllByText( /another flush is running/i ) ).length ).toBeGreaterThan( 0 );
 } );
 
-test( 'Layers renders one row per layer with detected badge', async () => {
+test( 'Layers: detected layers are listed, the others are folded away', async () => {
 	api.getLayers.mockResolvedValue( [
-		{ id: 'object-cache', label: 'Object cache', tier: 10, detected: true },
-		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, detected: false },
+		{ id: 'object-cache', label: 'Object cache', tier: 10, tier_label: 'Object cache', detected: true, order: 1 },
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: false },
 	] );
 	render( <Layers /> );
-	expect( await screen.findByText( 'Object cache' ) ).toBeInTheDocument();
-	expect( screen.getByText( 'Cloudflare' ) ).toBeInTheDocument();
-	expect( screen.getAllByText( /^detected$/i ) ).toHaveLength( 1 );
-	expect( screen.getAllByText( /not detected/i ) ).toHaveLength( 1 );
+	const list = ( await screen.findAllByRole( 'list' ) )[ 0 ]; // The first list holds the detected layers.
+	expect( within( list ).getByText( 'Object cache' ) ).toBeInTheDocument();
+	expect( screen.getByText( /not detected \(1\)/i ) ).toBeInTheDocument();
+	expect( within( list ).queryByText( 'Cloudflare' ) ).not.toBeInTheDocument();
 } );
 
 test( 'Settings never renders a stored token and omits it when blank', async () => {
@@ -92,10 +92,10 @@ test( 'History shows an empty state', async () => {
 
 test( 'Layers: Test connection only for detected layers and shows the result', async () => {
 	api.getLayers.mockResolvedValue( [
-		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, detected: true },
-		{ id: 'varnish', label: 'Varnish', tier: 40, detected: false },
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, order: 1 },
+		{ id: 'varnish', label: 'Varnish', tier: 40, tier_label: 'Reverse proxy', detected: false },
 	] );
-	api.testLayer.mockResolvedValue( { layer: 'cloudflare', status: 'failed', message: 'Invalid token' } );
+	api.testLayer.mockResolvedValue( { layer: 'cloudflare', status: 'failed', message: 'Invalid token', at: 1900000000 } );
 	render( <Layers /> );
 	const buttons = await screen.findAllByRole( 'button', { name: /test connection/i } );
 	expect( buttons ).toHaveLength( 1 );
@@ -358,23 +358,46 @@ test( 'Settings: no reset buttons on a single site', async () => {
 	expect( screen.queryByRole( 'button', { name: /reset to network default/i } ) ).not.toBeInTheDocument();
 } );
 
-test( 'Layer map: shows purge order from the visitor inwards, the last result, and purges one layer', async () => {
+test( 'Layer map: groups run from the visitor inwards, show the last purge and check, and purge one layer', async () => {
 	api.getLayers.mockResolvedValue( [
-		{ id: 'object-cache', label: 'Object cache', tier: 10, tier_label: 'Object cache', detected: true, order: 1, last: null },
-		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, order: 2, last: { status: 'failed', message: 'Invalid token', ms: 5, at: '2026-11-24 10:00:00', source: 'cron' } },
+		{ id: 'object-cache', label: 'Object cache', tier: 10, tier_label: 'Object cache', detected: true, order: 1, last: null, checked: null },
+		{
+			id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, order: 2,
+			last: { status: 'failed', message: 'Invalid token', ms: 5, at: '2026-11-24 10:00:00', source: 'cron' },
+			checked: { status: 'ok', message: 'Zone reachable', ms: 5, at: 1900000000 },
+		},
 	] );
 	api.purgeLayer.mockResolvedValue( { status: 'ok', results: [ { layer: 'cloudflare', status: 'ok', message: '' } ] } );
 	render( <Layers /> );
 	expect( await screen.findByText( /invalid token/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /zone reachable/i ) ).toBeInTheDocument();
 	expect( screen.getByText( /no purge recorded yet/i ) ).toBeInTheDocument();
-	const rows = screen.getAllByRole( 'row' ).slice( 1 );
-	expect( rows[ 0 ] ).toHaveTextContent( 'Cloudflare' ); // Closest to the visitor first.
-	expect( rows[ 0 ] ).toHaveTextContent( '2' );
-	expect( rows[ 1 ] ).toHaveTextContent( 'Object cache' );
-	await userEvent.click( within( rows[ 0 ] ).getByRole( 'button', { name: /purge this layer/i } ) );
+	expect( screen.getByText( /not checked yet/i ) ).toBeInTheDocument();
+	const headings = screen.getAllByRole( 'heading', { level: 3 } ).map( ( h ) => h.textContent );
+	expect( headings ).toEqual( [ 'CDN / edge', 'Object cache' ] ); // Closest to the visitor first.
+	const cf = screen.getByText( 'Cloudflare' ).closest( 'li' );
+	expect( cf ).toHaveTextContent( '2' );
+	await userEvent.click( within( cf ).getByRole( 'button', { name: /purge this layer/i } ) );
 	expect( api.purgeLayer ).toHaveBeenCalledWith( 'cloudflare' );
-	expect( await screen.findByText( /purge: ok/i ) ).toBeInTheDocument();
-	expect( api.getLayers ).toHaveBeenCalledTimes( 2 ); // Reloaded to refresh the last result.
+	await waitFor( () => expect( api.getLayers ).toHaveBeenCalledTimes( 2 ) ); // Reloaded so the last-purge line is fresh.
+} );
+
+test( 'Layer map: Check all tests every detected layer, Refresh reloads the detection', async () => {
+	api.getLayers.mockResolvedValue( [
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, order: 1 },
+		{ id: 'fastly', label: 'Fastly', tier: 50, tier_label: 'CDN / edge', detected: true, order: 2 },
+		{ id: 'varnish', label: 'Varnish', tier: 40, tier_label: 'Reverse proxy', detected: false },
+	] );
+	api.testLayer.mockImplementation( async ( id ) => ( { layer: id, status: id === 'fastly' ? 'failed' : 'ok', message: id === 'fastly' ? 'Bad key' : 'Reachable', at: 1900000000 } ) );
+	render( <Layers /> );
+	await userEvent.click( await screen.findByRole( 'button', { name: /check all connections/i } ) );
+	await waitFor( () => expect( api.testLayer ).toHaveBeenCalledTimes( 2 ) );
+	expect( api.testLayer ).not.toHaveBeenCalledWith( 'varnish' );
+	expect( await screen.findByText( /bad key/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /reachable/i ) ).toBeInTheDocument();
+
+	await userEvent.click( screen.getByRole( 'button', { name: /^refresh$/i } ) );
+	await waitFor( () => expect( api.getLayers ).toHaveBeenCalledTimes( 2 ) );
 } );
 
 test( 'Layer map: a layer can be switched off and shows as paused when the environment guard applies', async () => {
@@ -388,7 +411,7 @@ test( 'Layer map: a layer can be switched off and shows as paused when the envir
 	expect( await screen.findByText( /paused \(see settings\)/i ) ).toBeInTheDocument();
 	await userEvent.click( screen.getByRole( 'button', { name: /switch off/i } ) );
 	expect( api.setLayerEnabled ).toHaveBeenCalledWith( 'cloudflare', false );
-	expect( await screen.findByText( /switched off/i ) ).toBeInTheDocument();
+	expect( await screen.findByText( /^switched off$/i ) ).toBeInTheDocument();
 	expect( screen.getByRole( 'button', { name: /purge this layer/i } ) ).toBeDisabled();
 	expect( screen.getByRole( 'button', { name: /switch on/i } ) ).toBeInTheDocument();
 } );

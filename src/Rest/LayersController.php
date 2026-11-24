@@ -45,6 +45,7 @@ final class LayersController extends AbstractController {
 
 	public function list(): array {
 		$last     = $this->services->history->lastPerLayer();
+		$checks   = $this->checks();
 		$disabled = $this->services->settings->disabledLayers();
 		$order    = 0;
 		$rows     = array();
@@ -60,6 +61,7 @@ final class LayersController extends AbstractController {
 				'paused'     => $this->services->guard->reasonFor( $l->tier() ),
 				'order'      => $detected ? ++$order : null,
 				'last'       => $last[ $l->id() ] ?? null,
+				'checked'    => $checks[ $l->id() ] ?? null,
 			);
 		}
 		return $rows;
@@ -89,26 +91,49 @@ final class LayersController extends AbstractController {
 		return $this->run_response( $this->services->flusher->flushLayer( 'admin-layer', $layer->id() ) );
 	}
 
+	/** @return array<string,array{status:string,message:string,ms:int,at:int}> The latest connection check of each layer. */
+	private function checks(): array {
+		$saved = $this->services->store->get( 'layer_checks', array() );
+		return is_array( $saved ) ? $saved : array();
+	}
+
+	/** Remembers a connection check, so it is still there after the page is reloaded. */
+	private function remember_check( string $id, string $status, string $message, int $ms ): array {
+		$entry         = array(
+			'status'  => $status,
+			'message' => mb_substr( $message, 0, 300 ),
+			'ms'      => $ms,
+			'at'      => time(),
+		);
+		$checks        = $this->checks();
+		$checks[ $id ] = $entry;
+		$known         = array_map( static fn( $l ) => $l->id(), $this->services->registry->all() );
+		$this->services->store->set( 'layer_checks', array_intersect_key( $checks, array_flip( $known ) ) );
+		return $entry;
+	}
+
 	public function test( \WP_REST_Request $req ): array|\WP_Error {
 		$layer = $this->services->registry->find( (string) $req['id'] );
 		if ( ! $layer ) {
 			return new \WP_Error( 'purgekit_no_layer', 'Unknown layer', array( 'status' => 404 ) );
 		}
 		try {
-			$r = $layer->test();
+			$r      = $layer->test();
+			$status = $r->status;
+			$text   = $r->message;
+			$ms     = $r->ms;
 		} catch ( \Throwable $e ) {
-			return array(
-				'layer'   => $layer->id(),
-				'status'  => 'failed',
-				'message' => $e->getMessage(),
-				'ms'      => 0,
-			);
+			$status = 'failed';
+			$text   = $e->getMessage();
+			$ms     = 0;
 		}
-		return array(
-			'layer'   => $r->layer,
-			'status'  => $r->status,
-			'message' => $r->message,
-			'ms'      => $r->ms,
-		);
+		// A layer that is not set up was not checked, so that is not remembered as a result.
+		$entry = 'skipped' === $status ? array(
+			'status'  => $status,
+			'message' => $text,
+			'ms'      => $ms,
+			'at'      => time(),
+		) : $this->remember_check( $layer->id(), $status, $text, $ms );
+		return array( 'layer' => $layer->id() ) + $entry;
 	}
 }

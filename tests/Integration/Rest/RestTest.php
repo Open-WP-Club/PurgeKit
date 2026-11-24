@@ -358,4 +358,23 @@ final class RestTest extends \WP_UnitTestCase {
 		$this->call( 'POST', '/settings', array( 'adopt_home' => true ) );
 		$this->assertSame( strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ), $this->call( 'GET', '/settings' )->get_data()['guard']['recorded_host'] );
 	}
+
+	public function test_connection_checks_are_remembered_for_the_layer_list(): void {
+		wp_set_current_user( $this->admin );
+		$res = $this->call( 'POST', '/layers/object-cache/test' )->get_data();
+		$this->assertSame( 'object-cache', $res['layer'] );
+		$this->assertArrayHasKey( 'at', $res );
+
+		$list = $this->call( 'GET', '/layers' )->get_data();
+		$row  = array_values( array_filter( $list, static fn( $l ) => 'object-cache' === $l['id'] ) )[0];
+		$this->assertSame( $res['status'], $row['checked']['status'] );
+		$this->assertSame( $res['at'], $row['checked']['at'] );
+
+		$not_set_up = array_values( array_filter( $list, static fn( $l ) => ! $l['detected'] ) );
+		if ( $not_set_up ) {
+			$this->call( 'POST', '/layers/' . $not_set_up[0]['id'] . '/test' );
+			$after = array_values( array_filter( $this->call( 'GET', '/layers' )->get_data(), static fn( $l ) => $l['id'] === $not_set_up[0]['id'] ) )[0];
+			$this->assertNull( $after['checked'], 'A layer that is not set up was not checked, so nothing is remembered.' );
+		}
+	}
 }
