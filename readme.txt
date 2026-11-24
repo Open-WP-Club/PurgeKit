@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.4
+Stable tag: 0.1.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,13 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.1.5 =
+* New: "Why isn't it cached?" in the Inspector: explains what stops a page from being cached (cookies set on an anonymous visit, Cache-Control, Vary, status codes, Cloudflare DYNAMIC or BYPASS) and whether a cache answered the second visit.
+* New: Cloudflare tools: purge by URL prefix or cache tag, development mode on and off, and the APO status.
+* New: Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, SpinupWP and Pantheon layers.
+* Improved: the layer map groups layers by type, shows the last purge and the last connection check, and has "Check all connections" and "Refresh".
+* Fixed: pagination URLs of a changed post follow the site's real permalink structure, and switching a layer off is respected at once.
 
 = 0.1.4 =
 * New: export and import the settings and saved rules, to copy a setup between sites (API keys are never exported).
