@@ -72,7 +72,7 @@ export default function Rules() {
 			</p>
 			{ rules.length === 0 && <p>{ __( 'No rules yet.', 'purgekit' ) }</p> }
 			{ rules.map( ( rule, i ) => (
-				<details key={ rule.id || i } open={ ! rule.id } className="purgekit-rule" style={ { marginBottom: 12 } }>
+				<details key={ rule.id || i } open={ ! rule.id } className="purgekit-rule">
 					<summary>
 						<strong>{ rule.name }</strong>
 						{ ! rule.enabled && ` (${ __( 'off', 'purgekit' ) })` } — { ACTION_LABELS[ rule.action ] }

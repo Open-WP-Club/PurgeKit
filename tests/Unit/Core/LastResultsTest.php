@@ -47,6 +47,7 @@ final class LastResultsTest extends TestCase {
 	}
 
 	public function test_tier_labels(): void {
+		$this->assertSame( 'PHP code cache', Tier::label( Tier::OPCACHE ) );
 		$this->assertSame( 'Object cache', Tier::label( Tier::OBJECT ) );
 		$this->assertSame( 'Cache plugin', Tier::label( Tier::PLUGIN ) );
 		$this->assertSame( 'Host cache', Tier::label( Tier::HOST ) );

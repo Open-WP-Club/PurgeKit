@@ -54,5 +54,9 @@ final class Menu {
 		wp_add_inline_script( 'purgekit-admin', 'window.purgekitData = ' . wp_json_encode( array( 'csvUrl' => $csv_base ) ) . ';', 'before' );
 		wp_set_script_translations( 'purgekit-admin', 'purgekit' );
 		wp_enqueue_style( 'wp-components' );
+		if ( file_exists( $dir . 'style-index.css' ) ) {
+			wp_enqueue_style( 'purgekit-admin', plugins_url( 'build/style-index.css', PURGEKIT_FILE ), array( 'wp-components' ), $asset['version'] );
+			wp_style_add_data( 'purgekit-admin', 'rtl', 'replace' );
+		}
 	}
 }

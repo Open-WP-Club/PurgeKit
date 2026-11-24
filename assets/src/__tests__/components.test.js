@@ -429,3 +429,15 @@ test( 'Scheduled purges: lists, adds with a unix time, and cancels', async () =>
 	expect( Number.isInteger( at ) && at > 1800000000 ).toBe( true );
 	expect( urls ).toEqual( [ 'https://a.test/sale/' ] );
 } );
+
+test( 'Settings: the OPcache switch is sent only when changed', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		opcache_enabled: false, webhook_key_set: true, webhook_url: 'https://a.test/hook', providers: [], guard: { paused: null },
+	} );
+	api.saveSettings.mockResolvedValue( {} );
+	render( <Settings /> );
+	await userEvent.click( await screen.findByLabelText( /reset php opcache when everything is purged/i ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
+	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { opcache_enabled: true } );
+} );

@@ -115,7 +115,7 @@ export default function Layers() {
 									{ r && ! working && (
 										<div>
 											{ r.kind === 'purge' ? __( 'Purge: ', 'purgekit' ) : '' }
-											{ r.status === 'ok' ? __( 'OK', 'purgekit' ) : r.message || r.status }
+											{ r.status === 'ok' ? r.message || __( 'OK', 'purgekit' ) : r.message || r.status }
 										</div>
 									) }
 								</td>

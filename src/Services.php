@@ -21,6 +21,8 @@ use PurgeKit\Layers\ApiLayer;
 use PurgeKit\Layers\Catalog;
 use PurgeKit\Layers\CloudflareLayer;
 use PurgeKit\Layers\NginxFastcgiLayer;
+use PurgeKit\Layers\OpcacheLayer;
+use PurgeKit\Layers\PhpOpcache;
 use PurgeKit\Layers\ObjectCacheLayer;
 use PurgeKit\Layers\ProviderSpecs;
 use PurgeKit\Layers\Registry;
@@ -75,7 +77,7 @@ final class Services {
 		$s->history  = new Repository();
 
 		$layers       = array_merge(
-			array( new ObjectCacheLayer() ),
+			array( new OpcacheLayer( $s->store, new PhpOpcache() ), new ObjectCacheLayer() ),
 			Catalog::callbackLayers(),
 			array(
 				new VarnishLayer( $s->http, $s->store, home_url() ),

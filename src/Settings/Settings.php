@@ -124,6 +124,7 @@ final class Settings {
 			'cloudflare_zone'    => (string) $this->store->get( 'cloudflare_zone', '' ),
 			'alert_email'        => $this->alertEmail(),
 			'alert_on'           => $this->alertOn(),
+			'opcache_enabled'    => (bool) $this->store->get( 'opcache_enabled', false ),
 			'varnish_enabled'    => (bool) $this->store->get( 'varnish_enabled', false ),
 			'nginx_cache_path'   => (string) $this->store->get( 'nginx_cache_path', '' ),
 			'nginx_cache_key'    => (string) $this->store->get( 'nginx_cache_key', '' ),
@@ -139,7 +140,7 @@ final class Settings {
 		if ( isset( $patch['schedule'] ) && in_array( $patch['schedule'], self::SCHEDULES, true ) ) {
 			$this->store->set( 'schedule', $patch['schedule'] );
 		}
-		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'verify_after_flush', 'allow_external' ) as $flag ) {
+		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'opcache_enabled', 'verify_after_flush', 'allow_external' ) as $flag ) {
 			if ( isset( $patch[ $flag ] ) ) {
 				$this->store->set( $flag, (bool) $patch[ $flag ] );
 			}

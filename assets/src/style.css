@@ -1,0 +1,159 @@
+/* PurgeKit admin screen. Everything is scoped under .purgekit so it cannot leak into the rest of wp-admin. */
+
+.purgekit {
+	max-width: 1100px;
+	margin-top: 8px;
+}
+
+.purgekit__title {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+}
+
+.purgekit__title small {
+	color: #646970;
+	font-size: 13px;
+	font-weight: 400;
+}
+
+/* Tabs */
+.purgekit .components-tab-panel__tabs {
+	border-bottom: 1px solid #c3c4c7;
+	margin-bottom: 20px;
+	gap: 4px;
+}
+
+.purgekit .components-tab-panel__tabs-item {
+	height: 44px;
+	padding: 0 16px;
+	font-weight: 500;
+}
+
+.purgekit .components-tab-panel__tab-content {
+	padding: 0;
+}
+
+/* Cards */
+.purgekit-card {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 20px 24px;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.purgekit-card > h2 {
+	margin: 0 0 12px;
+	font-size: 15px;
+	line-height: 1.4;
+}
+
+.purgekit-card > :last-child {
+	margin-bottom: 0;
+}
+
+.purgekit h3 {
+	margin: 28px 0 12px;
+	padding-top: 20px;
+	border-top: 1px solid #dcdcde;
+	font-size: 14px;
+}
+
+.purgekit h3:first-child {
+	margin-top: 0;
+	padding-top: 0;
+	border-top: 0;
+}
+
+/* Forms */
+.purgekit-form {
+	max-width: 680px;
+}
+
+.purgekit .components-base-control,
+.purgekit .components-toggle-control {
+	margin-bottom: 18px;
+}
+
+.purgekit .components-base-control__help {
+	margin-top: 6px;
+	color: #646970;
+}
+
+.purgekit .components-textarea-control__input,
+.purgekit .components-text-control__input {
+	width: 100%;
+}
+
+.purgekit fieldset {
+	border: 0;
+	margin: 16px 0;
+	padding: 0;
+}
+
+.purgekit legend {
+	margin-bottom: 8px;
+	font-weight: 600;
+}
+
+.purgekit fieldset .components-base-control {
+	margin-bottom: 6px;
+}
+
+.purgekit details > summary {
+	cursor: pointer;
+}
+
+/* Tables (the layer map and the history) */
+.purgekit table.widefat {
+	width: 100%;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.purgekit table.widefat th,
+.purgekit table.widefat td {
+	vertical-align: top;
+	padding: 10px 12px;
+}
+
+.purgekit table.widefat small {
+	color: #646970;
+}
+
+/* Saved rules */
+.purgekit-rule {
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	padding: 12px 16px;
+	margin-bottom: 12px;
+}
+
+.purgekit-rule[open] {
+	background: #fff;
+}
+
+.purgekit-rule > summary {
+	padding: 2px 0;
+}
+
+.purgekit-rule > :not(summary) {
+	margin-top: 14px;
+}
+
+/* Notices inside the app sit tight under what they refer to */
+.purgekit .components-notice {
+	margin: 14px 0 0;
+}
+
+.purgekit .notice.inline {
+	margin: 12px 0 18px;
+}
+
+/* Rows of buttons */
+.purgekit .components-button + .components-button {
+	margin-left: 4px;
+}

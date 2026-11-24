@@ -8,7 +8,22 @@ import Inspector from './components/Inspector';
 import Rules from './components/Rules';
 
 const TABS = [
-	{ name: 'dashboard', title: __( 'Dashboard', 'purgekit' ), Component: () => <><Status /><Layers /></> },
+	{
+		name: 'dashboard',
+		title: __( 'Dashboard', 'purgekit' ),
+		Component: () => (
+			<>
+				<section className="purgekit-card">
+					<h2>{ __( 'Cache status', 'purgekit' ) }</h2>
+					<Status />
+				</section>
+				<section className="purgekit-card">
+					<h2>{ __( 'Cache layers', 'purgekit' ) }</h2>
+					<Layers />
+				</section>
+			</>
+		),
+	},
 	{ name: 'inspector', title: __( 'Inspector', 'purgekit' ), Component: Inspector },
 	{ name: 'rules', title: __( 'Rules', 'purgekit' ), Component: Rules },
 	{ name: 'history', title: __( 'History', 'purgekit' ), Component: History },
@@ -17,12 +32,21 @@ const TABS = [
 
 export default function App() {
 	return (
-		<div className="wrap">
-			<h1>PurgeKit</h1>
+		<div className="wrap purgekit">
+			<h1 className="purgekit__title">
+				PurgeKit <small>{ __( 'Cache purging across every layer', 'purgekit' ) }</small>
+			</h1>
 			<TabPanel tabs={ TABS }>
 				{ ( tab ) => {
 					const { Component } = TABS.find( ( t ) => t.name === tab.name );
-					return <Component />;
+					// The dashboard builds its own cards; every other tab is one card.
+					return tab.name === 'dashboard' ? (
+						<Component />
+					) : (
+						<section className="purgekit-card">
+							<Component />
+						</section>
+					);
 				} }
 			</TabPanel>
 		</div>
