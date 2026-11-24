@@ -60,4 +60,23 @@ final class CatalogTest extends TestCase {
 		$this->assertContains( 'wp-engine', $ids );
 		$this->assertCount( 9, $ids );
 	}
+
+	public function test_wp_fastest_cache_uses_class_and_action(): void {
+		$this->assertFalse( $this->find( 'wp-fastest-cache' )->detect() );
+		Monkey\Actions\expectDone( 'wpfc_clear_all_cache' )->once()->with( true );
+		$this->find( 'wp-fastest-cache' )->purgeAll();
+	}
+
+	public function test_siteground_purges_everything_not_just_home(): void {
+		Monkey\Functions\expect( 'sg_cachepress_purge_everything' )->once();
+		Monkey\Functions\expect( 'sg_cachepress_purge_cache' )->never();
+		$this->find( 'siteground' )->purgeAll();
+	}
+
+	public function test_kinsta_fails_loudly_without_api(): void {
+		$GLOBALS['kinsta_cache'] = null;
+		// The executor catches Throwable and records the layer as failed.
+		$this->expectException( \RuntimeException::class );
+		$this->find( 'kinsta' )->purgeAll();
+	}
 }

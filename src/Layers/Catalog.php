@@ -6,8 +6,10 @@ namespace PurgeKit\Layers;
 
 /**
  * Cache plugins and hosts that expose a plain PHP purge function or action.
- * Vendor function names were taken from each vendor's public docs; verify against
- * the vendor's current docs when adding or changing a row.
+ * Names were checked on 2026-11-24 against the plugin sources on wordpress.org
+ * (LiteSpeed, W3TC, WP Super Cache, WP Fastest Cache, Nginx Helper, SiteGround) and
+ * WP Rocket's docs. WP Engine and Kinsta are closed mu-plugins: community-documented
+ * only, so those rows are guarded and fail loudly instead of silently doing nothing.
  */
 final class Catalog {
 	/** @return CallbackLayer[] */
@@ -61,8 +63,9 @@ final class Catalog {
 				'wp-fastest-cache',
 				'WP Fastest Cache',
 				Tier::PLUGIN,
-				static fn() => function_exists( 'wpfc_clear_all_cache' ),
-				static fn() => wpfc_clear_all_cache( true )
+				// wpfc_clear_all_cache() is a method of WpFastestCache, not a global function; the action is the public entry point.
+				static fn() => class_exists( 'WpFastestCache' ),
+				static fn() => do_action( 'wpfc_clear_all_cache', true )
 			),
 			new CallbackLayer(
 				'nginx-helper',
@@ -75,8 +78,14 @@ final class Catalog {
 				'siteground',
 				'SiteGround Optimizer',
 				Tier::HOST,
-				static fn() => function_exists( 'sg_cachepress_purge_cache' ),
-				static fn() => sg_cachepress_purge_cache()
+				static fn() => function_exists( 'sg_cachepress_purge_everything' ) || function_exists( 'sg_cachepress_purge_cache' ),
+				// sg_cachepress_purge_cache() without a URL only purges the home page.
+				static fn() => function_exists( 'sg_cachepress_purge_everything' ) ? sg_cachepress_purge_everything() : sg_cachepress_purge_cache(),
+				static function ( array $urls ) {
+					foreach ( $urls as $url ) {
+						function_exists( 'sg_cachepress_purge_cache' ) ? sg_cachepress_purge_cache( $url ) : sg_cachepress_purge_everything();
+					}
+				}
 			),
 			new CallbackLayer(
 				'wp-engine',
@@ -84,7 +93,12 @@ final class Catalog {
 				Tier::HOST,
 				static fn() => class_exists( 'WpeCommon' ),
 				static function () {
-					\WpeCommon::purge_memcached();
+					if ( ! method_exists( 'WpeCommon', 'purge_varnish_cache' ) ) {
+						throw new \RuntimeException( 'WpeCommon::purge_varnish_cache() not available' );
+					}
+					if ( method_exists( 'WpeCommon', 'purge_memcached' ) ) {
+						\WpeCommon::purge_memcached();
+					}
 					\WpeCommon::purge_varnish_cache();
 				}
 			),
@@ -95,6 +109,9 @@ final class Catalog {
 				static fn() => class_exists( '\Kinsta\Cache' ),
 				static function () {
 					global $kinsta_cache;
+					if ( ! is_object( $kinsta_cache ) || ! isset( $kinsta_cache->kinsta_cache_purge ) || ! method_exists( $kinsta_cache->kinsta_cache_purge, 'purge_complete_caches' ) ) {
+						throw new \RuntimeException( 'Kinsta cache API not available' );
+					}
 					$kinsta_cache->kinsta_cache_purge->purge_complete_caches();
 				}
 			),

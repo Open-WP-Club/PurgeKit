@@ -16,3 +16,4 @@ parameters:
             identifiers:
                 - function.notFound
                 - class.notFound
+                - function.impossibleType
