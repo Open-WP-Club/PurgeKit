@@ -4,7 +4,7 @@
  * Description:       One control centre for every cache layer on your site. Detects changes, purges your cache plugin, host, CDN and Varnish in the right order, and warms the cache afterwards.
  * Version:           0.1.0
  * Requires at least: 6.4
- * Requires PHP:      8.0
+ * Requires PHP:      8.2
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       purgekit

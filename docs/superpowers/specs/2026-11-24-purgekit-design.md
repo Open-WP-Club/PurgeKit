@@ -26,7 +26,7 @@ Built from scratch with a focus on being productive, easy to test and easy to ex
 
 ## Constraints
 
-- PHP 8.0+, WordPress 6.4+.
+- PHP 8.2 to 8.6 (supported range), WordPress 6.4+.
 - Composer PSR-4 autoload (`PurgeKit\`); the built plugin zip ships `vendor/autoload.php` with no dev dependencies.
 - Admin UI: `@wordpress/scripts` build, `@wordpress/components`, talks only to `/wp-json/purgekit/v1`.
 - Plugin slug / text domain / prefix: `purgekit`.
@@ -120,7 +120,7 @@ Table schema details, exact REST route shapes, React component structure, file-s
 
 ## Calls made by the builder (author may veto)
 
-- PHP 8.0+ / WP 6.4+ minimum.
+- PHP 8.2+ / WP 6.4+ minimum (raised from 8.0 by the author).
 - Name, slug and prefix `purgekit`.
 - Secrets: constants first, then sodium-encrypted option.
 - History in a custom table with 90-day retention.
