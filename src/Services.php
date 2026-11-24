@@ -105,14 +105,13 @@ final class Services {
 		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );
 		$host        = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 		$s->guard    = new EnvironmentGuard( wp_get_environment_type(), $host, $s->settings->homeHost(), $s->settings->allowExternal() );
-		$disabled    = $s->settings->disabledLayers();
 		$s->flusher  = new Flusher(
 			$s->queue,
 			new Planner( new PostUrlExpander(), home_url(), $s->settings->excludePaths() ),
 			new Executor(
 				$s->registry,
 				new WpClock(),
-				static fn( $layer ) => in_array( $layer->id(), $disabled, true ) ? 'Switched off in the layer map.' : $s->guard->reasonFor( $layer->tier() )
+				static fn( $layer ) => in_array( $layer->id(), $s->settings->disabledLayers(), true ) ? 'Switched off in the layer map.' : $s->guard->reasonFor( $layer->tier() )
 			),
 			$s->lock,
 			$s->history,

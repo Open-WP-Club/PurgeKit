@@ -70,13 +70,15 @@ final class PostUrlExpander implements UrlExpander {
 
 	/** The listing itself plus its first pages: a new or changed item can shift everything after it. */
 	private function paged( array $lists ): array {
+		global $wp_rewrite;
 		$urls  = $lists;
 		$depth = max( 0, min( 5, (int) apply_filters( 'purgekit_pagination_depth', 2 ) ) );
-		if ( '' !== (string) get_option( 'permalink_structure' ) ) {
-			foreach ( $lists as $list ) {
-				for ( $page = 2; $page <= $depth + 1; $page++ ) {
-					$urls[] = trailingslashit( $list ) . user_trailingslashit( "page/$page", 'paged' );
-				}
+		foreach ( $lists as $list ) {
+			for ( $page = 2; $page <= $depth + 1; $page++ ) {
+				// Pretty permalinks use /page/2/, plain ones ?paged=2; building the wrong form would purge nothing.
+				$urls[] = $wp_rewrite->using_permalinks()
+					? trailingslashit( $list ) . user_trailingslashit( $wp_rewrite->pagination_base . "/$page", 'paged' )
+					: add_query_arg( 'paged', $page, $list );
 			}
 		}
 		return $urls;

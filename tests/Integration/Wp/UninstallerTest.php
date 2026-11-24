@@ -15,10 +15,24 @@ final class UninstallerTest extends \WP_UnitTestCase {
 		wp_schedule_event( time() + 60, 'hourly', Cron::SCAN );
 		wp_schedule_single_event( time() + 60, 'purgekit_warm' );
 
+		// The WordPress test case rewrites DROP TABLE into DROP TEMPORARY TABLE, so a real table that the plugin
+		// activation created stays in place. Check the statement PurgeKit sends instead; a real drop was verified
+		// by running the uninstaller through WP-CLI against the wp-env database.
+		$statements = array();
+		add_filter(
+			'query',
+			static function ( $query ) use ( &$statements ) {
+				$statements[] = (string) $query;
+				return $query;
+			},
+			1
+		);
+
 		( new Uninstaller() )->run();
 
 		global $wpdb;
-		$this->assertNull( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $svc->history->table() ) ) );
+		$drops = array_filter( $statements, static fn( $q ) => 1 === preg_match( '/^DROP TABLE IF EXISTS\s+\S*purgekit_history/', trim( $q ) ) );
+		$this->assertCount( 1, $drops, 'The history table is dropped.' );
 		$this->assertSame( 0, (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'purgekit\\_%'" ) );
 		$this->assertSame( 'keep', get_option( 'unrelated_option' ) );
 		$this->assertFalse( wp_next_scheduled( Cron::SCAN ) );

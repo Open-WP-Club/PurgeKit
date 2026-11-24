@@ -206,6 +206,7 @@ final class RestTest extends \WP_UnitTestCase {
 
 	public function test_provider_fields_are_whitelisted_stored_and_secrets_stay_hidden(): void {
 		wp_set_current_user( $this->admin );
+		$site_url = get_option( 'siteurl' );
 		$this->call(
 			'POST',
 			'/settings',
@@ -218,7 +219,7 @@ final class RestTest extends \WP_UnitTestCase {
 				),
 			)
 		);
-		$this->assertSame( 'http://example.org', get_option( 'siteurl' ), 'Only whitelisted keys are writable.' );
+		$this->assertSame( $site_url, get_option( 'siteurl' ), 'Only whitelisted keys are writable.' );
 		$data = $this->call( 'GET', '/settings' )->get_data();
 		$this->assertStringNotContainsString( 'topsecret', wp_json_encode( $data ) );
 		$bunny = array_values( array_filter( $data['providers'], static fn( $p ) => 'bunny' === $p['id'] ) )[0];
@@ -277,8 +278,8 @@ final class RestTest extends \WP_UnitTestCase {
 		$res = $this->call( 'POST', '/settings', array( 'verify_after_flush' => true, 'warm_sitemap_limit' => 9999 ) );
 		$this->assertTrue( $res->get_data()['verify_after_flush'] );
 		$this->assertSame( 100, $res->get_data()['warm_sitemap_limit'] );
-		$this->assertSame( array(), $res->get_data()['overridden'], 'Single site has nothing to reset.' );
-		$this->assertFalse( $res->get_data()['multisite'] );
+		$this->assertSame( array(), $res->get_data()['overridden'], 'Nothing is overridden yet.' );
+		$this->assertSame( is_multisite(), $res->get_data()['multisite'] );
 	}
 
 	public function test_history_rows_carry_the_verification_result(): void {

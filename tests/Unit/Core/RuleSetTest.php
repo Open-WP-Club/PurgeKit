@@ -238,4 +238,20 @@ final class RuleSetTest extends TestCase {
 		$this->assertSame( 'admin-layer', $history->rows[0][0] );
 		$this->assertSame( array( 'cdn' ), array_map( static fn( $r ) => $r->layer, $run->results ) );
 	}
+
+	public function test_flush_layer_on_a_switched_off_layer_is_skipped_not_ok(): void {
+		$cdn     = new FakeLayer( 'cdn', 50 );
+		$flusher = new Flusher(
+			new Queue( new FakeStore() ),
+			$this->planner(),
+			new Executor( new Registry( array( $cdn ) ), new FakeClock(), static fn( $l ) => 'Switched off.' ),
+			new FakeLock(),
+			new FakeHistory(),
+			static function () {}
+		);
+		$run = $flusher->flushLayer( 'admin-layer', 'cdn' );
+		$this->assertSame( Run::SKIPPED, $run->status );
+		$this->assertSame( array(), $cdn->calls );
+		$this->assertSame( 'skipped', $run->results[0]->status );
+	}
 }

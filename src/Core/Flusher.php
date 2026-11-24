@@ -213,11 +213,17 @@ final class Flusher {
 	 */
 	private function runJobs( array $jobs, PurgePlan $merged ): Run {
 		$results = array();
+		$ran     = false;
 		foreach ( $jobs as $job ) {
 			$run = $this->executor->run( $job['plan'], $job['layers'] );
 			array_push( $results, ...$run->results );
+			$ran = $ran || Run::SKIPPED !== $run->status;
 		}
-		return array() === $results ? new Run( Run::SKIPPED, array(), $merged ) : Run::fromResults( $results, $merged );
+		if ( array() === $results ) {
+			return new Run( Run::SKIPPED, array(), $merged );
+		}
+		// Every layer was switched off or paused: nothing was purged, so this must not read as a success.
+		return $ran ? Run::fromResults( $results, $merged ) : new Run( Run::SKIPPED, $results, $merged );
 	}
 
 	/** @param array<int,array{plan:PurgePlan,layers:?array}> $jobs */

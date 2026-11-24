@@ -28,7 +28,7 @@ final class PostUrlExpanderTest extends \WP_UnitTestCase {
 	}
 
 	public function test_post_also_expands_to_archives_pagination_parents_and_sitemaps(): void {
-		update_option( 'permalink_structure', '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		register_post_type( 'book', array( 'public' => true, 'has_archive' => true ) );
 		$parent = self::factory()->post->create( array( 'post_type' => 'page', 'post_status' => 'publish' ) );
 		$child  = self::factory()->post->create( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_parent' => $parent ) );
@@ -52,7 +52,7 @@ final class PostUrlExpanderTest extends \WP_UnitTestCase {
 	}
 
 	public function test_parent_categories_and_their_pages_are_purged_too(): void {
-		update_option( 'permalink_structure', '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		$top  = self::factory()->category->create( array( 'name' => 'Top' ) );
 		$sub  = self::factory()->category->create( array( 'name' => 'Sub', 'parent' => $top ) );
 		$id   = self::factory()->post->create( array( 'post_status' => 'publish', 'post_category' => array( $sub ) ) );
@@ -63,7 +63,7 @@ final class PostUrlExpanderTest extends \WP_UnitTestCase {
 	}
 
 	public function test_a_changed_term_also_purges_its_parent_and_pagination(): void {
-		update_option( 'permalink_structure', '/%postname%/' );
+		$this->set_permalink_structure( '/%postname%/' );
 		$top  = self::factory()->category->create( array( 'name' => 'Top2' ) );
 		$sub  = self::factory()->category->create( array( 'name' => 'Sub2', 'parent' => $top ) );
 		$urls = ( new PostUrlExpander() )->expand( Change::forUrls( 'term', array(), array( 'term_id' => $sub, 'taxonomy' => 'category' ) ) );
@@ -82,5 +82,13 @@ final class PostUrlExpanderTest extends \WP_UnitTestCase {
 		$urls      = ( new PostUrlExpander() )->expand( Change::forUrls( 'post', array(), array( 'post_id' => $variation ) ) );
 		$this->assertContains( get_permalink( $product ), $urls );
 		$this->assertContains( get_category_link( $cat ), $urls );
+	}
+
+	public function test_plain_permalinks_paginate_with_a_query_argument(): void {
+		$this->set_permalink_structure( '' );
+		$id   = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$urls = ( new PostUrlExpander() )->expand( Change::forUrls( 'post', array(), array( 'post_id' => $id ) ) );
+		$this->assertContains( home_url( '/?paged=2' ), $urls );
+		$this->assertNotContains( home_url( '/page/2/' ), $urls );
 	}
 }
