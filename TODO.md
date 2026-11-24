@@ -31,7 +31,7 @@ Verified before the PHP floor change: 71 PHP unit tests, 57 integration tests (`
 7. ~~`Cron::sync()` only on admin_init~~ fixed: also hooked to mode/schedule option changes.
 8. **Multisite** is not implemented (`Uninstaller` loops over sites but is untested). Planned for v0.3.
 9. `readme.txt` still has placeholders: `Contributors: purgekit`, `Tested up to: 6.8`.
-10. Warming is sequential (5 URLs per batch), not parallel.
+10. ~~Warming is sequential~~ fixed: each batch of 5 is fetched concurrently via `Http::requestMany()` (`WpOrg\Requests::request_multiple`, with a sequential fallback). Not yet exercised against a real site; check on wp-env.
 11. History stores the full URL list as JSON; very large purges make large rows.
 12. Early commits of the v0.1 work carry a different author email than the configured git identity. Decide whether that matters before the repo is widely shared; fixing it means rewriting history.
 

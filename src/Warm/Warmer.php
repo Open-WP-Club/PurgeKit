@@ -2,11 +2,10 @@
 namespace PurgeKit\Warm;
 
 use PurgeKit\Core\Http;
-use PurgeKit\Core\HttpException;
 use PurgeKit\Core\PurgePlan;
 use PurgeKit\Core\Store;
 
-/** Visits purged pages so the next visitor gets a cached copy. ponytail: sequential, not parallel; add curl_multi if warming speed matters. */
+/** Visits purged pages so the next visitor gets a cached copy. Each batch is fetched concurrently. */
 final class Warmer {
 	private const KEY = 'warm_queue';
 
@@ -30,19 +29,16 @@ final class Warmer {
 		$queue = $this->queue();
 		$batch = array_splice( $queue, 0, $this->concurrency );
 		$this->store->set( self::KEY, $queue );
-		foreach ( $batch as $url ) {
-			try {
-				$this->http->request(
-					'GET',
-					$url,
-					array(
-						'headers' => array( 'X-PurgeKit-Warm' => '1' ),
-						'timeout' => 10,
-					)
-				);
-			} catch ( HttpException $e ) {
-				continue;
-			}
+		if ( $batch ) {
+			// One concurrent round; failures are returned and deliberately dropped, not retried.
+			$this->http->requestMany(
+				'GET',
+				$batch,
+				array(
+					'headers' => array( 'X-PurgeKit-Warm' => '1' ),
+					'timeout' => 10,
+				)
+			);
 		}
 		return count( $batch );
 	}

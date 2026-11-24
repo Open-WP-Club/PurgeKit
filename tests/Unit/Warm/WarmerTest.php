@@ -24,6 +24,15 @@ final class WarmerTest extends TestCase {
 		$this->assertSame( 0, $w->pending() );
 	}
 
+	public function test_batch_is_one_concurrent_round(): void {
+		$http = new FakeHttp();
+		$w    = $this->warmer( $http );
+		$w->enqueue( PurgePlan::forUrls( array_map( static fn( $i ) => "https://site.test/$i", range( 1, 5 ) ) ) );
+		$w->processBatch();
+		$this->assertSame( 1, $http->batches );
+		$this->assertCount( 5, $http->requests );
+	}
+
 	public function test_failed_url_is_dropped_not_retried(): void {
 		$http = new FakeHttp();
 		$http->queue( new HttpException( 'timeout' ) );
