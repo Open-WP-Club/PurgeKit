@@ -19,6 +19,9 @@ final class Hooks {
 		add_action( 'updated_option', array( $this, 'on_option' ) );
 		add_action( 'woocommerce_product_set_stock', array( $this, 'on_stock' ) );
 		add_action( 'acf/save_post', array( $this, 'on_acf' ) );
+		// WooCommerce starts and ends scheduled sales from cron, without any post status change.
+		add_action( 'woocommerce_scheduled_sales', array( $this, 'sales_begin' ), 0 );
+		add_action( 'woocommerce_scheduled_sales', array( $this, 'sales_end' ), 999 );
 		foreach ( array( 'wp_create_nav_menu', 'wp_update_nav_menu', 'wp_update_nav_menu_item', 'wp_delete_nav_menu', 'customize_save_after', 'switch_theme', 'activated_plugin', 'deactivated_plugin', 'upgrader_process_complete' ) as $hook ) {
 			add_action( $hook, array( $this, 'on_site_wide' ) );
 		}
@@ -95,6 +98,28 @@ final class Hooks {
 		if ( is_object( $product ) && method_exists( $product, 'get_id' ) ) {
 			$this->queue->add( Change::forUrls( 'stock', array(), array( 'post_id' => (int) $product->get_id() ) ) );
 		}
+	}
+
+	public function sales_begin(): void {
+		add_action( 'woocommerce_update_product', array( $this, 'on_product_saved' ) );
+	}
+
+	public function sales_end(): void {
+		remove_action( 'woocommerce_update_product', array( $this, 'on_product_saved' ) );
+	}
+
+	/** Only hooked while WooCommerce runs its scheduled sales, so it does not duplicate the normal post hooks. */
+	public function on_product_saved( mixed $product_id ): void {
+		$this->queue->add(
+			Change::forUrls(
+				'post',
+				array(),
+				array(
+					'post_id'   => (int) $product_id,
+					'post_type' => 'product',
+				)
+			)
+		);
 	}
 
 	public function on_acf( mixed $post_id ): void {

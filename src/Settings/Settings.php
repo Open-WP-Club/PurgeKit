@@ -38,6 +38,44 @@ final class Settings {
 		return 'failed' === $this->store->get( 'alert_on', 'problems' ) ? 'failed' : 'problems';
 	}
 
+	/** Layers switched off in the layer map; their credentials stay saved. */
+	public function disabledLayers(): array {
+		$v = $this->store->get( 'disabled_layers', array() );
+		return is_array( $v ) ? array_values( array_filter( $v, static fn( $id ) => is_string( $id ) && 1 === preg_match( '/^[a-z0-9\-]+$/', $id ) ) ) : array();
+	}
+
+	/** Path patterns that automatic and rule-driven flushes never purge ("/cart/*"). */
+	public function excludePaths(): array {
+		return self::lines( (string) $this->store->get( 'exclude_paths', '' ) );
+	}
+
+	/** Lets CDN purges run although the site looks like a staging or cloned copy. */
+	public function allowExternal(): bool {
+		return (bool) $this->store->get( 'allow_external', false );
+	}
+
+	/** The host the layers were set up for, remembered to notice a cloned site. */
+	public function homeHost(): string {
+		return (string) $this->store->get( 'home_host', '' );
+	}
+
+	public function setHomeHost( string $host ): void {
+		$this->store->set( 'home_host', strtolower( $host ) );
+	}
+
+	/** @return string[] */
+	private static function lines( string $text ): array {
+		$out   = array();
+		$split = preg_split( '/\R/', $text );
+		foreach ( false === $split ? array() : $split as $line ) {
+			$line = trim( $line );
+			if ( '' !== $line && strlen( $line ) <= 200 && 1 === preg_match( '#^[/*]#', $line ) ) {
+				$out[ $line ] = true;
+			}
+		}
+		return array_slice( array_keys( $out ), 0, 50 );
+	}
+
 	public function warmEnabled(): bool {
 		return (bool) $this->store->get( 'warm_enabled', true );
 	}
@@ -80,6 +118,9 @@ final class Settings {
 			'warm_enabled'       => $this->warmEnabled(),
 			'warm_sitemap_limit' => $this->warmSitemapLimit(),
 			'verify_after_flush' => $this->verifyAfterFlush(),
+			'allow_external'     => $this->allowExternal(),
+			'disabled_layers'    => $this->disabledLayers(),
+			'exclude_paths'      => implode( "\n", $this->excludePaths() ),
 			'cloudflare_zone'    => (string) $this->store->get( 'cloudflare_zone', '' ),
 			'alert_email'        => $this->alertEmail(),
 			'alert_on'           => $this->alertOn(),
@@ -98,10 +139,17 @@ final class Settings {
 		if ( isset( $patch['schedule'] ) && in_array( $patch['schedule'], self::SCHEDULES, true ) ) {
 			$this->store->set( 'schedule', $patch['schedule'] );
 		}
-		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'verify_after_flush' ) as $flag ) {
+		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'verify_after_flush', 'allow_external' ) as $flag ) {
 			if ( isset( $patch[ $flag ] ) ) {
 				$this->store->set( $flag, (bool) $patch[ $flag ] );
 			}
+		}
+		if ( isset( $patch['exclude_paths'] ) && is_string( $patch['exclude_paths'] ) ) {
+			$this->store->set( 'exclude_paths', implode( "\n", self::lines( $patch['exclude_paths'] ) ) );
+		}
+		if ( isset( $patch['disabled_layers'] ) && is_array( $patch['disabled_layers'] ) ) {
+			$ids = array_filter( $patch['disabled_layers'], static fn( $id ) => is_string( $id ) && 1 === preg_match( '/^[a-z0-9\-]+$/', $id ) );
+			$this->store->set( 'disabled_layers', array_values( array_unique( $ids ) ) );
 		}
 		if ( isset( $patch['warm_sitemap_limit'] ) && is_numeric( $patch['warm_sitemap_limit'] ) ) {
 			$this->store->set( 'warm_sitemap_limit', max( 0, min( self::SITEMAP_LIMIT_MAX, (int) $patch['warm_sitemap_limit'] ) ) );

@@ -5,11 +5,8 @@ name: Plugin Check
 # for security/performance scanning. Free, official, Apache-2.0 licensed:
 # https://github.com/WordPress/plugin-check-action
 #
-# This plugin isn't distributed via the wp.org SVN repo (self-hosted via
-# GitHub Releases), so the "plugin_repo" category (readme.txt format,
-# trademarks, self-hosted-updater flag, prefixing) is skipped — it flags
-# wp.org submission requirements that don't apply here. Security,
-# performance, and general checks still apply to any WordPress plugin.
+# The "plugin_repo" category (readme.txt format, trademarks, prefixing) is
+# skipped for now; security, performance and general checks still apply.
 
 on:
   push:
@@ -31,17 +28,16 @@ jobs:
           php-version: '8.3'
           tools: composer:v2
 
-      # The action activates the plugin as-is from the checkout — without this,
-      # wc-multi-store-sync.php's own classes never load (its autoloader is
-      # Composer's classmap, gated on vendor/autoload.php existing) and
-      # activation fails with "Class ... not found". Mirrors the --no-dev
-      # install build-release.yml does for the real distributed ZIP.
+      # The action activates the plugin as-is from the checkout, so the Composer
+      # autoloader must exist (production dependencies only, like the release zip).
       - name: Install production dependencies
         run: composer install --no-dev --optimize-autoloader --no-interaction
 
       - name: Run WordPress Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
+          # The checkout directory is named after the repository (PurgeKit); the real slug is lowercase.
+          slug: purgekit
           strict: true
           exclude-directories: 'vendor,tests,node_modules,.github,build-src,coverage'
           categories: |

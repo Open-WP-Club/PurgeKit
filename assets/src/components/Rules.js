@@ -2,6 +2,7 @@ import { useEffect, useState } from '@wordpress/element';
 import { Button, CheckboxControl, Notice, SelectControl, TextControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { getLayers, getRules, saveRules } from '../api';
+import Scheduled from './Scheduled';
 import Preview from './Preview';
 
 const ACTION_LABELS = {
@@ -120,6 +121,8 @@ export default function Rules() {
 			<hr />
 			<p>{ __( 'Save your rules first, then preview what the current queue would do with them.', 'purgekit' ) }</p>
 			<Preview />
+			<hr />
+			<Scheduled />
 		</div>
 	);
 }

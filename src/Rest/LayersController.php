@@ -25,6 +25,15 @@ final class LayersController extends AbstractController {
 		);
 		register_rest_route(
 			self::NS,
+			'/layers/(?P<id>[a-z0-9\-]+)/enabled',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'set_enabled' ),
+				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/layers/(?P<id>[a-z0-9\-]+)/test',
 			array(
 				'methods'             => 'POST',
@@ -35,9 +44,10 @@ final class LayersController extends AbstractController {
 	}
 
 	public function list(): array {
-		$last  = $this->services->history->lastPerLayer();
-		$order = 0;
-		$rows  = array();
+		$last     = $this->services->history->lastPerLayer();
+		$disabled = $this->services->settings->disabledLayers();
+		$order    = 0;
+		$rows     = array();
 		foreach ( $this->services->registry->all() as $l ) {
 			$detected = $l->detect();
 			$rows[]   = array(
@@ -46,11 +56,26 @@ final class LayersController extends AbstractController {
 				'tier'       => $l->tier(),
 				'tier_label' => Tier::label( $l->tier() ),
 				'detected'   => $detected,
+				'enabled'    => ! in_array( $l->id(), $disabled, true ),
+				'paused'     => $this->services->guard->reasonFor( $l->tier() ),
 				'order'      => $detected ? ++$order : null,
 				'last'       => $last[ $l->id() ] ?? null,
 			);
 		}
 		return $rows;
+	}
+
+	public function set_enabled( \WP_REST_Request $req ): array|\WP_Error {
+		$id = (string) $req['id'];
+		if ( ! $this->services->registry->find( $id ) ) {
+			return new \WP_Error( 'purgekit_no_layer', 'Unknown layer', array( 'status' => 404 ) );
+		}
+		$disabled = array_diff( $this->services->settings->disabledLayers(), array( $id ) );
+		if ( false === filter_var( $req->get_param( 'enabled' ), FILTER_VALIDATE_BOOLEAN ) ) {
+			$disabled[] = $id;
+		}
+		$this->services->settings->update( array( 'disabled_layers' => array_values( $disabled ) ) );
+		return $this->list();
 	}
 
 	public function purge_all( \WP_REST_Request $req ): \WP_REST_Response|\WP_Error {

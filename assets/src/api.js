@@ -29,3 +29,10 @@ export const saveRules = ( rules ) =>
 	apiFetch( { path: `${ NS }/rules`, method: 'PUT', data: { rules } } );
 export const purgeLayer = ( id ) =>
 	apiFetch( { path: `${ NS }/layers/${ encodeURIComponent( id ) }/purge-all`, method: 'POST' } );
+export const setLayerEnabled = ( id, enabled ) =>
+	apiFetch( { path: `${ NS }/layers/${ encodeURIComponent( id ) }/enabled`, method: 'POST', data: { enabled } } );
+export const getScheduled = () => apiFetch( { path: `${ NS }/scheduled` } );
+export const addScheduled = ( at, urls, note ) =>
+	apiFetch( { path: `${ NS }/scheduled`, method: 'POST', data: { at, urls, note } } );
+export const cancelScheduled = ( id ) =>
+	apiFetch( { path: `${ NS }/scheduled/${ id }`, method: 'DELETE' } );

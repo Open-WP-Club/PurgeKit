@@ -4,19 +4,30 @@ namespace PurgeKit\Core;
 use PurgeKit\Layers\Registry;
 
 final class Executor {
-	public function __construct( private Registry $registry, private Clock $clock ) {}
+	/** @var callable(\PurgeKit\Layers\LayerInterface): ?string|null */
+	private $skip;
+
+	/** @param callable(\PurgeKit\Layers\LayerInterface): ?string|null $skip Returns a reason to leave a layer out (disabled, paused), or null. */
+	public function __construct( private Registry $registry, private Clock $clock, ?callable $skip = null ) {
+		$this->skip = $skip;
+	}
+
+	private function skipReason( \PurgeKit\Layers\LayerInterface $layer ): ?string {
+		return $this->skip ? ( $this->skip )( $layer ) : null;
+	}
 
 	/**
 	 * The layers a run would use, without running anything.
 	 *
 	 * @param string[]|null $only
-	 * @return array<int,array{id:string,label:string}>
+	 * @return array<int,array{id:string,label:string,skipped:?string}>
 	 */
 	public function layersFor( ?array $only = null ): array {
 		return array_map(
-			static fn( $l ) => array(
-				'id'    => $l->id(),
-				'label' => $l->label(),
+			fn( $l ) => array(
+				'id'      => $l->id(),
+				'label'   => $l->label(),
+				'skipped' => $this->skipReason( $l ),
 			),
 			$this->select( $only )
 		);
@@ -29,8 +40,15 @@ final class Executor {
 			return new Run( Run::SKIPPED, array(), $plan );
 		}
 
-		$results = array();
+		$results  = array();
+		$left_out = 0;
 		foreach ( $layers as $layer ) {
+			$why = $this->skipReason( $layer );
+			if ( null !== $why ) {
+				$results[] = new LayerResult( $layer->id(), LayerResult::SKIPPED, $why );
+				++$left_out;
+				continue;
+			}
 			$start = $this->clock->now();
 			try {
 				$result = $plan->all ? $layer->purgeAll() : $layer->purgeUrls( $plan->urls );
@@ -39,6 +57,9 @@ final class Executor {
 			}
 			$result->ms = $this->clock->now() - $start;
 			$results[]  = $result;
+		}
+		if ( count( $results ) === $left_out ) {
+			return new Run( Run::SKIPPED, $results, $plan ); // Every layer was switched off or paused: nothing was purged.
 		}
 		return Run::fromResults( $results, $plan );
 	}

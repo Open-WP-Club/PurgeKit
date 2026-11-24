@@ -61,6 +61,12 @@ final class SettingsController extends AbstractController {
 			'webhook_url'          => rest_url( self::NS . '/webhook/flush' ),
 			'multisite'            => is_multisite(),
 			'overridden'           => $this->services->settings->overridden(),
+			'guard'                => array(
+				'paused'        => $this->services->guard->reason(),
+				'environment'   => wp_get_environment_type(),
+				'recorded_host' => $this->services->settings->homeHost(),
+				'host'          => strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ),
+			),
 		);
 	}
 
@@ -69,6 +75,10 @@ final class SettingsController extends AbstractController {
 		// Reset first, so a patch in the same request can still pin a new value.
 		$this->services->settings->reset( (array) ( $body['reset'] ?? array() ) );
 		$this->services->settings->update( $body );
+		if ( ! empty( $body['adopt_home'] ) ) {
+			// "This is the real site now": remember the current address instead of the old one.
+			$this->services->settings->setHomeHost( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		}
 		if ( isset( $body['cloudflare_token'] ) && is_string( $body['cloudflare_token'] ) && '' !== $body['cloudflare_token'] ) {
 			$this->services->secrets->set( 'CLOUDFLARE_TOKEN', $body['cloudflare_token'] );
 		}

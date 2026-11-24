@@ -77,9 +77,12 @@ final class Repository implements HistoryWriter {
 
 	public function recent( int $limit, int $offset, array $filters = array() ): array {
 		global $wpdb;
-		list( $where, $args ) = $this->where( $filters );
-		$sql                  = 'SELECT * FROM ' . $this->table() . " $where ORDER BY id DESC LIMIT %d OFFSET %d";
-		$rows                 = $wpdb->get_results( $wpdb->prepare( $sql, array_merge( $args, array( $limit, $offset ) ) ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$status = ! empty( $filters['status'] ) ? (string) $filters['status'] : '';
+		if ( '' !== $status ) {
+			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE status = %s ORDER BY id DESC LIMIT %d OFFSET %d', $this->table(), $status, $limit, $offset ), ARRAY_A );
+		} else {
+			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i ORDER BY id DESC LIMIT %d OFFSET %d', $this->table(), $limit, $offset ), ARRAY_A );
+		}
 		return array_map( array( $this, 'hydrate' ), (array) $rows );
 	}
 
@@ -94,22 +97,17 @@ final class Repository implements HistoryWriter {
 
 	public function count( array $filters = array() ): int {
 		global $wpdb;
-		list( $where, $args ) = $this->where( $filters );
-		$sql                  = 'SELECT COUNT(*) FROM ' . $this->table() . " $where";
-		return (int) ( $args ? $wpdb->get_var( $wpdb->prepare( $sql, $args ) ) : $wpdb->get_var( $sql ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		$status = ! empty( $filters['status'] ) ? (string) $filters['status'] : '';
+		if ( '' !== $status ) {
+			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE status = %s', $this->table(), $status ) );
+		}
+		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $this->table() ) );
 	}
 
 	public function prune( int $days ): int {
 		global $wpdb;
 		$cutoff = gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS );
-		return (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . $this->table() . ' WHERE created_at < %s', $cutoff ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-	}
-
-	private function where( array $filters ): array {
-		if ( ! empty( $filters['status'] ) ) {
-			return array( 'WHERE status = %s', array( (string) $filters['status'] ) );
-		}
-		return array( '', array() );
+		return (int) $wpdb->query( $wpdb->prepare( 'DELETE FROM %i WHERE created_at < %s', $this->table(), $cutoff ) );
 	}
 
 	/** @return array<string,mixed>|null */

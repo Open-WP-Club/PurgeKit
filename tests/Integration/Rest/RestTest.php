@@ -309,4 +309,53 @@ final class RestTest extends \WP_UnitTestCase {
 			$this->assertSame( 409, $this->call( 'POST', '/layers/' . $undetected[0]['id'] . '/purge-all' )->get_status() );
 		}
 	}
+
+	public function test_scheduled_purge_is_validated_listed_cancelled_and_needs_capability(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'GET', '/scheduled' )->get_status() );
+
+		wp_set_current_user( $this->admin );
+		$this->assertSame( 400, $this->call( 'POST', '/scheduled', array( 'at' => time() - 10 ) )->get_status(), 'Past times are refused.' );
+		$this->assertSame( 400, $this->call( 'POST', '/scheduled', array( 'at' => time() + 600, 'urls' => array( 'https://evil.test/x' ) ) )->get_status() );
+
+		$res = $this->call( 'POST', '/scheduled', array( 'at' => time() + 600, 'urls' => array( home_url( '/sale/' ) ), 'note' => 'Sale' ) );
+		$this->assertSame( 200, $res->get_status() );
+		$items = $res->get_data();
+		$this->assertCount( 1, $items );
+		$this->assertNotFalse( wp_next_scheduled( 'purgekit_scheduled_purge', array( $items[0]['id'] ) ) );
+
+		$this->svc->scheduler->run( $items[0]['id'] );
+		$this->assertSame( array(), $this->call( 'GET', '/scheduled' )->get_data(), 'A run removes the entry.' );
+
+		$again = $this->call( 'POST', '/scheduled', array( 'at' => time() + 900 ) )->get_data();
+		$this->assertSame( 200, $this->call( 'DELETE', '/scheduled/' . $again[0]['id'] )->get_status() );
+		$this->assertFalse( wp_next_scheduled( 'purgekit_scheduled_purge', array( $again[0]['id'] ) ) );
+		$this->assertSame( 404, $this->call( 'DELETE', '/scheduled/' . $again[0]['id'] )->get_status() );
+	}
+
+	public function test_a_layer_can_be_switched_off_and_is_then_skipped(): void {
+		wp_set_current_user( $this->admin );
+		$list = $this->call( 'POST', '/layers/object-cache/enabled', array( 'enabled' => false ) )->get_data();
+		$row  = array_values( array_filter( $list, static fn( $l ) => 'object-cache' === $l['id'] ) )[0];
+		$this->assertFalse( $row['enabled'] );
+		$this->assertSame( 404, $this->call( 'POST', '/layers/nope/enabled', array( 'enabled' => false ) )->get_status() );
+
+		$data = $this->call( 'POST', '/layers/object-cache/purge-all' )->get_data();
+		$this->assertSame( 'skipped', $data['status'] );
+
+		$this->call( 'POST', '/layers/object-cache/enabled', array( 'enabled' => true ) );
+		$this->assertSame( 'ok', $this->call( 'POST', '/layers/object-cache/purge-all' )->get_data()['status'] );
+	}
+
+	public function test_exclusions_and_the_staging_switch_are_saved_and_reported(): void {
+		wp_set_current_user( $this->admin );
+		$this->call( 'POST', '/settings', array( 'exclude_paths' => "/cart/*\nbad", 'allow_external' => true ) );
+		$data = $this->call( 'GET', '/settings' )->get_data();
+		$this->assertSame( '/cart/*', $data['exclude_paths'] );
+		$this->assertTrue( $data['allow_external'] );
+		$this->assertArrayHasKey( 'guard', $data );
+
+		$this->call( 'POST', '/settings', array( 'adopt_home' => true ) );
+		$this->assertSame( strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ), $this->call( 'GET', '/settings' )->get_data()['guard']['recorded_host'] );
+	}
 }

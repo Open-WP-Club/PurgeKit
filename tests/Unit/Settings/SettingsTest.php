@@ -66,4 +66,34 @@ final class SettingsTest extends TestCase {
 		$s->reset( array( 'mode' ) );
 		$this->assertSame( 'auto', $s->mode() );
 	}
+
+	public function test_exclusions_disabled_layers_and_the_staging_switch_are_validated(): void {
+		$s = new Settings( new FakeStore() );
+		$this->assertSame( array(), $s->excludePaths() );
+		$this->assertFalse( $s->allowExternal() );
+
+		$s->update(
+			array(
+				'exclude_paths'   => "/cart/*\n  /checkout/ \nnot-a-path\n\n/cart/*\n*.json",
+				'disabled_layers' => array( 'cloudflare', 'Bad Id!', 5, 'cloudflare' ),
+				'allow_external'  => true,
+			)
+		);
+		$this->assertSame( array( '/cart/*', '/checkout/', '*.json' ), $s->excludePaths() );
+		$this->assertSame( array( 'cloudflare' ), $s->disabledLayers() );
+		$this->assertTrue( $s->allowExternal() );
+		$this->assertSame( "/cart/*\n/checkout/\n*.json", $s->all()['exclude_paths'] );
+	}
+
+	public function test_exclusions_are_capped(): void {
+		$s = new Settings( new FakeStore() );
+		$s->update( array( 'exclude_paths' => implode( "\n", array_map( static fn( $i ) => "/p$i/", range( 1, 80 ) ) ) ) );
+		$this->assertCount( 50, $s->excludePaths() );
+	}
+
+	public function test_home_host_is_remembered_lowercase(): void {
+		$s = new Settings( new FakeStore() );
+		$s->setHomeHost( 'Site.TEST' );
+		$this->assertSame( 'site.test', $s->homeHost() );
+	}
 }

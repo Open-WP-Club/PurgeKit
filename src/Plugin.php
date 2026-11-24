@@ -2,6 +2,7 @@
 namespace PurgeKit;
 
 use PurgeKit\Admin\AdminBar;
+use PurgeKit\Admin\HealthNotice;
 use PurgeKit\Admin\HistoryExport;
 use PurgeKit\Admin\Menu;
 use PurgeKit\Admin\Notices;
@@ -39,6 +40,9 @@ final class Plugin {
 				}
 			}
 		);
+		self::remember_home( $s );
+		$s->scheduler->register();
+		( new HealthNotice( $s ) )->register();
 		( new Notices( $s ) )->register();
 		( new Router( $s ) )->register();
 		( new Menu() )->register();
@@ -64,6 +68,13 @@ final class Plugin {
 		if ( is_multisite() ) {
 			add_action( 'wp_initialize_site', array( self::class, 'new_site' ), 900 );
 			( new NetworkPage() )->register();
+		}
+	}
+
+	/** Remembers the address the site had when it was set up, so a cloned copy can be recognised later. */
+	private static function remember_home( Services $s ): void {
+		if ( '' === $s->settings->homeHost() && 'production' === wp_get_environment_type() ) {
+			$s->settings->setHomeHost( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 		}
 	}
 

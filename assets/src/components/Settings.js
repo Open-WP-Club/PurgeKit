@@ -1,5 +1,5 @@
 import { useEffect, useState } from '@wordpress/element';
-import { Button, SelectControl, TextControl, ToggleControl } from '@wordpress/components';
+import { Button, SelectControl, TextareaControl, TextControl, ToggleControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { getSettings, saveSettings, rotateWebhookKey, findCloudflareZone, testAlerts } from '../api';
 
@@ -79,6 +79,13 @@ export default function Settings() {
 			</p>
 		) : null;
 
+	const adoptHome = async () => {
+		await saveSettings( { adopt_home: true } );
+		const r = await getSettings();
+		setS( r );
+		setLoaded( r );
+	};
+
 	const removeSlack = async () => {
 		await saveSettings( { clear_slack_webhook: true } );
 		getSettings().then( ( r ) => {
@@ -90,7 +97,7 @@ export default function Settings() {
 	const save = async () => {
 		// Only send what changed: on multisite, saving a key makes the site stop inheriting the network default.
 		const patch = {};
-		[ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone', 'varnish_enabled', 'nginx_cache_path', 'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on' ].forEach( ( k ) => {
+		[ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone', 'varnish_enabled', 'nginx_cache_path', 'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths' ].forEach( ( k ) => {
 			if ( s[ k ] !== loaded[ k ] ) {
 				patch[ k ] = s[ k ];
 			}
@@ -156,6 +163,32 @@ export default function Settings() {
 				checked={ !! s.verify_after_flush }
 				onChange={ set( 'verify_after_flush' ) }
 				help={ __( 'Fetches up to three own pages once the purge is done and records in History whether a cache layer still serves a stale copy.', 'purgekit' ) }
+			/>
+			<h3>{ __( 'Safety', 'purgekit' ) }</h3>
+			{ s.guard?.paused && (
+				<div className="notice notice-warning inline">
+					<p>
+						{ __( 'Purges to CDNs and firewalls are paused: ', 'purgekit' ) }{ s.guard.paused }.{ ' ' }
+						{ s.guard.recorded_host && s.guard.recorded_host !== s.guard.host && (
+							<Button variant="link" onClick={ adoptHome }>{ __( 'This is the real site now', 'purgekit' ) }</Button>
+						) }
+					</p>
+				</div>
+			) }
+			<ToggleControl
+				__nextHasNoMarginBottom
+				label={ __( 'Allow CDN and firewall purges from this environment', 'purgekit' ) }
+				checked={ !! s.allow_external }
+				onChange={ set( 'allow_external' ) }
+				help={ __( 'Normally purges to Cloudflare, Fastly and similar are paused on staging sites and on copies of the site with a new address, so a clone cannot purge the live CDN.', 'purgekit' ) }
+			/>
+			<TextareaControl
+				__nextHasNoMarginBottom
+				label={ __( 'Never purge these paths (one per line)', 'purgekit' ) }
+				value={ s.exclude_paths || '' }
+				onChange={ set( 'exclude_paths' ) }
+				placeholder={ '/cart/*\n/checkout/*\n/my-account/*' }
+				help={ __( 'Applies to automatic and rule-driven purges of single pages. Start with / or *, and use * as a wildcard. “Purge everything” and pages you purge by hand are not affected.', 'purgekit' ) }
 			/>
 			<ToggleControl __nextHasNoMarginBottom label={ __( 'Varnish', 'purgekit' ) } checked={ s.varnish_enabled } onChange={ set( 'varnish_enabled' ) } />
 			<TextControl

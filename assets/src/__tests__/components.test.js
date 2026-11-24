@@ -8,6 +8,7 @@ import Settings from '../components/Settings';
 import History from '../components/History';
 import Inspector from '../components/Inspector';
 import Rules from '../components/Rules';
+import Scheduled from '../components/Scheduled';
 
 jest.mock( '../api' );
 
@@ -233,6 +234,7 @@ test( 'Settings: provider secrets are never shown, only changed fields are sent'
 } );
 
 test( 'Rules lists saved rules and saves an added one', async () => {
+	api.getScheduled.mockResolvedValue( [] );
 	api.getRules.mockResolvedValue( {
 		rules: [ { id: 'abcd1234', name: 'Shop', enabled: true, on: [ 'stock' ], post_types: [], action: 'home', layers: [] } ],
 		triggers: { stock: 'WooCommerce stock changes', post: 'A post changes' },
@@ -289,6 +291,7 @@ test( 'Preview says so when nothing would be purged, and shows errors', async ()
 } );
 
 test( 'Rules tab has a Preview button too', async () => {
+	api.getScheduled.mockResolvedValue( [] );
 	api.getRules.mockResolvedValue( { rules: [], triggers: {}, actions: [], max: 50 } );
 	api.getLayers.mockResolvedValue( [] );
 	api.previewFlush.mockResolvedValue( PREVIEW );
@@ -372,4 +375,57 @@ test( 'Layer map: shows purge order from the visitor inwards, the last result, a
 	expect( api.purgeLayer ).toHaveBeenCalledWith( 'cloudflare' );
 	expect( await screen.findByText( /purge: ok/i ) ).toBeInTheDocument();
 	expect( api.getLayers ).toHaveBeenCalledTimes( 2 ); // Reloaded to refresh the last result.
+} );
+
+test( 'Layer map: a layer can be switched off and shows as paused when the environment guard applies', async () => {
+	api.getLayers.mockResolvedValue( [
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, enabled: true, paused: 'Paused: staging', order: 1, last: null },
+	] );
+	api.setLayerEnabled.mockResolvedValue( [
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, enabled: false, paused: null, order: 1, last: null },
+	] );
+	render( <Layers /> );
+	expect( await screen.findByText( /paused \(see settings\)/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /switch off/i } ) );
+	expect( api.setLayerEnabled ).toHaveBeenCalledWith( 'cloudflare', false );
+	expect( await screen.findByText( /switched off/i ) ).toBeInTheDocument();
+	expect( screen.getByRole( 'button', { name: /purge this layer/i } ) ).toBeDisabled();
+	expect( screen.getByRole( 'button', { name: /switch on/i } ) ).toBeInTheDocument();
+} );
+
+test( 'Settings: safety section shows the pause, adopts the new address, and sends only the changed exclusions', async () => {
+	const base = {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		webhook_key_set: true, webhook_url: 'https://a.test/hook', allow_external: false, exclude_paths: '', providers: [],
+		guard: { paused: "this site runs in the 'staging' environment", environment: 'staging', recorded_host: 'a.test', host: 'b.test' },
+	};
+	api.getSettings.mockResolvedValue( base );
+	api.saveSettings.mockResolvedValue( {} );
+	render( <Settings /> );
+	expect( await screen.findByText( /purges to cdns and firewalls are paused/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /this is the real site now/i } ) );
+	expect( api.saveSettings ).toHaveBeenCalledWith( { adopt_home: true } );
+
+	await userEvent.type( screen.getByLabelText( /never purge these paths/i ), '/cart/*' );
+	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
+	const patch = api.saveSettings.mock.calls.at( -1 )[ 0 ];
+	expect( patch ).toEqual( { exclude_paths: '/cart/*' } );
+} );
+
+test( 'Scheduled purges: lists, adds with a unix time, and cancels', async () => {
+	api.getScheduled.mockResolvedValue( [ { id: 'abcd1234', at: 1900000000, urls: [], note: 'Launch' } ] );
+	api.addScheduled.mockResolvedValue( [] );
+	api.cancelScheduled.mockResolvedValue( [] );
+	render( <Scheduled /> );
+	expect( await screen.findByText( /launch/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /cancel/i } ) );
+	expect( api.cancelScheduled ).toHaveBeenCalledWith( 'abcd1234' );
+
+	await userEvent.type( screen.getByLabelText( /^when$/i ), '2030-01-02T09:00' );
+	await userEvent.type( screen.getByLabelText( /addresses on this site/i ), 'https://a.test/sale/' );
+	await userEvent.click( screen.getByRole( 'button', { name: /schedule purge/i } ) );
+	await waitFor( () => expect( api.addScheduled ).toHaveBeenCalledTimes( 1 ) );
+	const [ at, urls ] = api.addScheduled.mock.calls[ 0 ];
+	expect( Number.isInteger( at ) && at > 1800000000 ).toBe( true );
+	expect( urls ).toEqual( [ 'https://a.test/sale/' ] );
 } );

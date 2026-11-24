@@ -2,12 +2,15 @@
 namespace PurgeKit;
 
 use PurgeKit\Alerts\Notifier;
+use PurgeKit\Core\EnvironmentGuard;
 use PurgeKit\Core\Executor;
+use PurgeKit\Core\Health;
 use PurgeKit\Core\Flusher;
 use PurgeKit\Core\Planner;
 use PurgeKit\Core\PurgePlan;
 use PurgeKit\Core\Run;
 use PurgeKit\Core\Queue;
+use PurgeKit\Core\ScheduledPurges;
 use PurgeKit\Core\RuleStore;
 use PurgeKit\Detect\FileScanner;
 use PurgeKit\Detect\PostUrlExpander;
@@ -34,6 +37,7 @@ use PurgeKit\Wp\WpHttp;
 use PurgeKit\Wp\WpMailer;
 use PurgeKit\Wp\WpLock;
 use PurgeKit\Wp\NetworkStore;
+use PurgeKit\Wp\ScheduledRunner;
 use PurgeKit\Wp\WpStore;
 
 /** The object graph. Built once per request by Plugin; tests build their own. */
@@ -54,6 +58,9 @@ final class Services {
 	public Inspector $inspector;
 	public Verifier $verifier;
 	public Notifier $notifier;
+	public EnvironmentGuard $guard;
+	public ScheduledPurges $scheduled;
+	public ScheduledRunner $scheduler;
 
 	public static function build(): self {
 		$s          = new self();
@@ -84,10 +91,17 @@ final class Services {
 
 		$s->warmer   = new Warmer( $s->http, $s->store, home_url( '/' ), 5, static fn() => (array) apply_filters( 'purgekit_preload_urls', array() ), new SitemapReader( $s->http, home_url( '/' ), (array) apply_filters( 'purgekit_sitemap_paths', SitemapReader::PATHS ) ) );
 		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );
+		$host        = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		$s->guard    = new EnvironmentGuard( wp_get_environment_type(), $host, $s->settings->homeHost(), $s->settings->allowExternal() );
+		$disabled    = $s->settings->disabledLayers();
 		$s->flusher  = new Flusher(
 			$s->queue,
-			new Planner( new PostUrlExpander(), home_url() ),
-			new Executor( $s->registry, new WpClock() ),
+			new Planner( new PostUrlExpander(), home_url(), $s->settings->excludePaths() ),
+			new Executor(
+				$s->registry,
+				new WpClock(),
+				static fn( $layer ) => in_array( $layer->id(), $disabled, true ) ? 'Switched off in the layer map.' : $s->guard->reasonFor( $layer->tier() )
+			),
 			$s->lock,
 			$s->history,
 			static function ( PurgePlan $plan ) use ( $s ) {
@@ -99,10 +113,18 @@ final class Services {
 					wp_schedule_single_event( time() + 5, 'purgekit_warm' );
 				}
 			},
-			static fn( string $source, Run $run ) => $s->notifier->notify( $source, $run ),
+			static function ( string $source, Run $run ) use ( $s ) {
+				if ( in_array( $run->status, array( Run::OK, Run::PARTIAL, Run::FAILED ), true ) ) {
+					$s->store->set( 'last_run', Health::summarise( $run, $source, time() ) );
+				}
+				$s->notifier->notify( $source, $run );
+			},
 			$s->rules,
 			static fn( Run $run ) => $s->settings->verifyAfterFlush() ? $s->verifier->verify( $run ) : null
 		);
+
+		$s->scheduled = new ScheduledPurges( $s->store, home_url() );
+		$s->scheduler = new ScheduledRunner( $s->scheduled, $s->flusher );
 
 		$dirs       = apply_filters( 'purgekit_fingerprint_dirs', array( get_theme_root(), WP_PLUGIN_DIR ) );
 		$exts       = apply_filters( 'purgekit_fingerprint_extensions', array( 'php', 'js', 'css', 'json', 'html' ) );

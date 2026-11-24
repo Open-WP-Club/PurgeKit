@@ -5,7 +5,17 @@ final class Planner {
 	private string $host;
 	private string $home;
 
-	public function __construct( private UrlExpander $expander, string $home_url ) {
+	/** @var string[] Regular expressions built from the exclusion patterns. */
+	private array $exclude = array();
+
+	/** @param string[] $exclude Path patterns ("/cart/*") that are never purged by an automatic or rule-driven flush. */
+	public function __construct( private UrlExpander $expander, string $home_url, array $exclude = array() ) {
+		foreach ( $exclude as $pattern ) {
+			$pattern = trim( (string) $pattern );
+			if ( '' !== $pattern ) {
+				$this->exclude[] = '#^' . str_replace( '\\*', '.*', preg_quote( $pattern, '#' ) ) . '$#i';
+			}
+		}
 		$this->host = strtolower( (string) parse_url( $home_url, PHP_URL_HOST ) );
 		$this->home = rtrim( $home_url, '/' ) . '/';
 	}
@@ -21,9 +31,11 @@ final class Planner {
 			if ( $change->site_wide ) {
 				return PurgePlan::everything();
 			}
+			// A URL somebody asked for by hand, or a rule's own target, is never filtered out.
+			$explicit = in_array( $change->type, array( 'manual', 'rule' ), true );
 			foreach ( array_merge( $change->urls, $this->expander->expand( $change ) ) as $url ) {
 				$clean = $this->normalise( (string) $url );
-				if ( null !== $clean ) {
+				if ( null !== $clean && ( $explicit || ! $this->excluded( $clean ) ) ) {
 					$urls[ $clean ] = true;
 				}
 			}
@@ -46,5 +58,16 @@ final class Planner {
 	private function build( array $p ): string {
 		return $p['scheme'] . '://' . $p['host'] . ( isset( $p['port'] ) ? ':' . $p['port'] : '' )
 			. ( $p['path'] ?? '' ) . ( isset( $p['query'] ) ? '?' . $p['query'] : '' );
+	}
+
+	private function excluded( string $url ): bool {
+		$parts = parse_url( $url );
+		$path  = ( $parts['path'] ?? '/' ) . ( isset( $parts['query'] ) ? '?' . $parts['query'] : '' );
+		foreach ( $this->exclude as $regex ) {
+			if ( 1 === preg_match( $regex, $path ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
-import { getLayers, purgeLayer, testLayer } from '../api';
+import { getLayers, purgeLayer, setLayerEnabled, testLayer } from '../api';
 
 const STATUS_LABEL = {
 	ok: __( 'OK', 'purgekit' ),
@@ -23,6 +23,16 @@ export default function Layers() {
 	useEffect( () => {
 		load();
 	}, [] );
+
+	const toggle = async ( id, enabled ) => {
+		setBusy( ( b ) => ( { ...b, [ id ]: 'toggle' } ) );
+		try {
+			setLayers( await setLayerEnabled( id, enabled ) );
+		} catch ( e ) {
+			setResults( ( r ) => ( { ...r, [ id ]: { kind: 'toggle', status: 'failed', message: e.message } } ) );
+		}
+		setBusy( ( b ) => ( { ...b, [ id ]: null } ) );
+	};
 
 	const act = async ( id, kind ) => {
 		setBusy( ( b ) => ( { ...b, [ id ]: kind } ) );
@@ -70,7 +80,11 @@ export default function Layers() {
 									<br />
 									<small>{ l.tier_label }</small>
 								</td>
-								<td>{ l.detected ? __( 'Detected', 'purgekit' ) : __( 'Not detected', 'purgekit' ) }</td>
+								<td>
+									{ l.detected ? __( 'Detected', 'purgekit' ) : __( 'Not detected', 'purgekit' ) }
+									{ l.enabled === false && <div>{ __( 'Switched off', 'purgekit' ) }</div> }
+									{ l.paused && l.enabled !== false && <div title={ l.paused }>{ __( 'Paused (see Settings)', 'purgekit' ) }</div> }
+								</td>
 								<td>
 									{ l.last ? (
 										<span>
@@ -88,10 +102,15 @@ export default function Layers() {
 											<Button variant="secondary" size="small" isBusy={ working === 'test' } disabled={ !! working } onClick={ () => act( l.id, 'test' ) }>
 												{ __( 'Test connection', 'purgekit' ) }
 											</Button>{ ' ' }
-											<Button variant="tertiary" size="small" isBusy={ working === 'purge' } disabled={ !! working } onClick={ () => act( l.id, 'purge' ) }>
+											<Button variant="tertiary" size="small" isBusy={ working === 'purge' } disabled={ !! working || l.enabled === false } onClick={ () => act( l.id, 'purge' ) }>
 												{ __( 'Purge this layer', 'purgekit' ) }
-											</Button>
+											</Button>{ ' ' }
 										</>
+									) }
+									{ l.detected && (
+										<Button variant="tertiary" size="small" isBusy={ working === 'toggle' } disabled={ !! working } onClick={ () => toggle( l.id, l.enabled === false ) }>
+											{ l.enabled === false ? __( 'Switch on', 'purgekit' ) : __( 'Switch off', 'purgekit' ) }
+										</Button>
 									) }
 									{ r && ! working && (
 										<div>
