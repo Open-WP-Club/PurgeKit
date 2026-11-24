@@ -613,3 +613,38 @@ test( 'Cloudflare tools: an unavailable setting shows the reason', async () => {
 	expect( ( await screen.findAllByText( /needs zone settings/i ) ).length ).toBe( 2 );
 	expect( screen.queryByRole( 'button', { name: /turn on for 3 hours/i } ) ).not.toBeInTheDocument();
 } );
+
+test( 'Inspector: "Why isn\u2019t it cached?" lists the blockers first, then the rest, and never needs the other button', async () => {
+	api.checkCacheability.mockResolvedValue( {
+		verdict: 'blocked', url: 'https://a.test/', message: 'No cache is likely to store this page. See the reasons below.',
+		findings: [
+			{ severity: 'info', code: 'cache-control', message: 'There is no Cache-Control header.' },
+			{ severity: 'blocker', code: 'cookie', message: 'Cookie PHPSESSID: a PHP session was started.' },
+			{ severity: 'warning', code: 'vary', message: 'Vary: Cookie makes a separate copy.' },
+		],
+		evidence: [], cookies: [ 'PHPSESSID' ],
+		first: { status: 200, headers: { vary: 'Cookie' } }, second: { status: 200, headers: { vary: 'Cookie' } },
+	} );
+	render( <Inspector /> );
+	const button = screen.getByRole( 'button', { name: /why isn.t it cached/i } );
+	expect( button ).toBeDisabled();
+	await userEvent.type( screen.getByLabelText( /page url/i ), 'https://a.test/' );
+	await userEvent.click( button );
+	expect( api.checkCacheability ).toHaveBeenCalledWith( 'https://a.test/' );
+	expect( api.inspectUrl ).not.toHaveBeenCalled();
+
+	expect( await screen.findByText( /php session was started/i ) ).toBeInTheDocument();
+	const items = screen.getAllByRole( 'listitem' ).map( ( li ) => li.textContent );
+	expect( items[ 0 ] ).toMatch( /stops caching.*php session/i );
+	expect( items[ 1 ] ).toMatch( /may hurt caching.*vary: cookie/i );
+	expect( items[ 2 ] ).toMatch( /note.*no cache-control/i );
+	expect( screen.getByText( 'First visit', { exact: false } ) ).toBeInTheDocument();
+} );
+
+test( 'Inspector: the cacheability check shows an API error', async () => {
+	api.checkCacheability.mockRejectedValue( { message: 'Enter a URL on this site.' } );
+	render( <Inspector /> );
+	await userEvent.type( screen.getByLabelText( /page url/i ), 'https://elsewhere.test/' );
+	await userEvent.click( screen.getByRole( 'button', { name: /why isn.t it cached/i } ) );
+	expect( ( await screen.findAllByText( /enter a url on this site/i ) ).length ).toBeGreaterThan( 0 );
+} );

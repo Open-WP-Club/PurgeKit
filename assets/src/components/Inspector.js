@@ -1,7 +1,8 @@
 import { useState } from '@wordpress/element';
 import { Button, Notice, TextControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
-import { inspectUrl, purgeLayerUrl } from '../api';
+import { checkCacheability, inspectUrl, purgeLayerUrl } from '../api';
+import CacheReport from './CacheReport';
 
 const NOTICE = { ok: 'success', stale: 'warning', different: 'info', error: 'error' };
 
@@ -11,6 +12,8 @@ export default function Inspector() {
 	const [ result, setResult ] = useState( null );
 	const [ error, setError ] = useState( '' );
 	const [ purged, setPurged ] = useState( '' );
+	const [ report, setReport ] = useState( null );
+	const [ whyBusy, setWhyBusy ] = useState( false );
 
 	const run = async () => {
 		setBusy( true );
@@ -25,6 +28,18 @@ export default function Inspector() {
 		setBusy( false );
 	};
 
+	const why = async () => {
+		setWhyBusy( true );
+		setError( '' );
+		setReport( null );
+		try {
+			setReport( await checkCacheability( url ) );
+		} catch ( e ) {
+			setError( e.message );
+		}
+		setWhyBusy( false );
+	};
+
 	const purge = async ( layer ) => {
 		try {
 			const r = await purgeLayerUrl( layer, result.url );
@@ -36,7 +51,7 @@ export default function Inspector() {
 
 	return (
 		<div>
-			<p>{ __( "Why isn't my change showing? Enter a page on this site to see which cache is serving it.", 'purgekit' ) }</p>
+			<p>{ __( "Why isn't my change showing? Enter a page on this site to see which cache is serving it, or ask why it is not cached at all.", 'purgekit' ) }</p>
 			<TextControl
 				__nextHasNoMarginBottom
 				__next40pxDefaultSize
@@ -46,9 +61,13 @@ export default function Inspector() {
 				onChange={ setUrl }
 				placeholder="https://example.com/page/"
 			/>
-			<Button variant="primary" isBusy={ busy } disabled={ busy || url === '' } onClick={ run }>
+			<Button variant="primary" isBusy={ busy } disabled={ busy || whyBusy || url === '' } onClick={ run }>
 				{ __( 'Inspect', 'purgekit' ) }
+			</Button>{ ' ' }
+			<Button variant="secondary" isBusy={ whyBusy } disabled={ busy || whyBusy || url === '' } onClick={ why }>
+				{ __( 'Why isn’t it cached?', 'purgekit' ) }
 			</Button>
+			{ report && <CacheReport report={ report } /> }
 			{ error && <Notice status="error" isDismissible={ false }>{ error }</Notice> }
 			{ result && (
 				<div>

@@ -16,6 +16,7 @@ use PurgeKit\Core\RuleStore;
 use PurgeKit\Detect\FileScanner;
 use PurgeKit\Detect\PostUrlExpander;
 use PurgeKit\History\Repository;
+use PurgeKit\Inspector\Cacheability;
 use PurgeKit\Inspector\Inspector;
 use PurgeKit\Inspector\Verifier;
 use PurgeKit\Layers\ApiLayer;
@@ -67,6 +68,7 @@ final class Services {
 	public Cron $cron;
 	public Warmer $warmer;
 	public Inspector $inspector;
+	public Cacheability $cacheability;
 	public Verifier $verifier;
 	public Notifier $notifier;
 	public EnvironmentGuard $guard;
@@ -88,7 +90,7 @@ final class Services {
 		$s->porter   = new SettingsPorter( $s->settings, $s->store, $s->rules );
 		$s->history  = new Repository();
 
-		$layers       = array_merge(
+		$layers          = array_merge(
 			array(
 				new OpcacheLayer( $s->store, new PhpOpcache() ),
 				new ApcuLayer( $s->store, new PhpApcu() ),
@@ -104,10 +106,11 @@ final class Services {
 			),
 			array_map( static fn( array $spec ) => new ApiLayer( $spec, $s->http, $s->secrets, $s->store ), array_values( ProviderSpecs::all() ) )
 		);
-		$layers       = apply_filters( 'purgekit_layers', $layers );
-		$s->registry  = new Registry( is_array( $layers ) ? $layers : array() );
-		$s->inspector = new Inspector( $s->http, $s->registry, new WpClock() );
-		$s->verifier  = new Verifier( new Inspector( $s->http, $s->registry, new WpClock(), 5 ), home_url( '/' ) );
+		$layers          = apply_filters( 'purgekit_layers', $layers );
+		$s->registry     = new Registry( is_array( $layers ) ? $layers : array() );
+		$s->inspector    = new Inspector( $s->http, $s->registry, new WpClock() );
+		$s->cacheability = new Cacheability( $s->http, $s->registry );
+		$s->verifier     = new Verifier( new Inspector( $s->http, $s->registry, new WpClock(), 5 ), home_url( '/' ) );
 
 		$s->warmer   = new Warmer( $s->http, $s->store, home_url( '/' ), 5, static fn() => (array) apply_filters( 'purgekit_preload_urls', array() ), new SitemapReader( $s->http, home_url( '/' ), (array) apply_filters( 'purgekit_sitemap_paths', SitemapReader::PATHS ) ) );
 		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );

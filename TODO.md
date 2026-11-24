@@ -4,7 +4,6 @@ Ideas for later, roughly by value for the effort. Nothing here is started.
 
 ## Diagnostics
 
-- **"Why isn't it cached?"** A companion to the "Why isn't my change showing?" inspector. Explain what stops a page from being cached: `Set-Cookie` on an anonymous request, `Cache-Control: private` or `no-store`, `Vary: Cookie`, cookies set by plugins. The data is already in the headers the inspector collects (`src/Inspector`).
 - **Cache monitor.** Check a few key URLs on a schedule and report to Site Health or Slack when the CDN keeps answering `BYPASS` or `MISS`. Reuses the inspector and `Alerts\Notifier`.
 - **Credentials health check.** A Health tab that checks the saved credentials (Cloudflare token scope, weak or never-rotated webhook key, unreachable Slack URL). Extends `LayerInterface::test()`.
 

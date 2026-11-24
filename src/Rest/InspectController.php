@@ -16,6 +16,15 @@ final class InspectController extends AbstractController {
 		);
 		register_rest_route(
 			self::NS,
+			'/inspect/cacheability',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'cacheability' ),
+				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/layers/(?P<id>[a-z0-9\-]+)/purge',
 			array(
 				'methods'             => 'POST',
@@ -31,6 +40,15 @@ final class InspectController extends AbstractController {
 			return new \WP_Error( 'purgekit_bad_url', 'Enter a URL on this site.', array( 'status' => 400 ) );
 		}
 		return $this->services->inspector->inspect( $url );
+	}
+
+	/** "Why isn't it cached?" for one page of this site. */
+	public function cacheability( \WP_REST_Request $req ): array|\WP_Error {
+		$url = $this->own_url( (string) $req->get_param( 'url' ) );
+		if ( null === $url ) {
+			return new \WP_Error( 'purgekit_bad_url', 'Enter a URL on this site.', array( 'status' => 400 ) );
+		}
+		return $this->services->cacheability->check( $url );
 	}
 
 	/** Purge one URL from one layer only (the inspector's "purge this layer" button). */

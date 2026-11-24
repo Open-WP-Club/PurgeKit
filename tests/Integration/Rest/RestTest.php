@@ -433,4 +433,20 @@ final class RestTest extends \WP_UnitTestCase {
 		$this->assertSame( 409, $this->call( 'POST', '/cloudflare/development-mode', array( 'enabled' => true ) )->get_status() );
 		$this->assertSame( 409, $this->call( 'POST', '/cloudflare/purge', array( 'prefixes' => array( 'example.com/blog/' ) ) )->get_status() );
 	}
+
+	public function test_cacheability_check_is_limited_to_this_site_and_needs_capability(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'POST', '/inspect/cacheability', array( 'url' => home_url( '/' ) ) )->get_status() );
+
+		wp_set_current_user( $this->admin );
+		$this->assertSame( 400, $this->call( 'POST', '/inspect/cacheability', array( 'url' => 'https://evil.test/' ) )->get_status() );
+		$this->assertSame( 400, $this->call( 'POST', '/inspect/cacheability', array( 'url' => 'file:///etc/passwd' ) )->get_status() );
+
+		$res = $this->call( 'POST', '/inspect/cacheability', array( 'url' => home_url( '/' ) ) );
+		$this->assertSame( 200, $res->get_status() );
+		$data = $res->get_data();
+		$this->assertContains( $data['verdict'], array( 'cached', 'blocked', 'uncertain', 'error' ), 'Whatever the loopback does, the answer has a verdict.' );
+		$this->assertArrayHasKey( 'findings', $data );
+		$this->assertStringNotContainsString( 'cookie_value', wp_json_encode( $data ) );
+	}
 }

@@ -44,3 +44,5 @@ export const setCloudflareDevMode = ( enabled ) =>
 	apiFetch( { path: `${ NS }/cloudflare/development-mode`, method: 'POST', data: { enabled } } );
 export const cloudflarePurge = ( prefixes, tags ) =>
 	apiFetch( { path: `${ NS }/cloudflare/purge`, method: 'POST', data: { prefixes, tags } } );
+export const checkCacheability = ( url ) =>
+	apiFetch( { path: `${ NS }/inspect/cacheability`, method: 'POST', data: { url } } );

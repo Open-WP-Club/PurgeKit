@@ -38,6 +38,10 @@ define( 'PURGEKIT_CLOUDFLARE_TOKEN', '...' );
 
 Keys entered in the UI are stored encrypted (libsodium) and are never shown again.
 
+### Why isn't it cached?
+
+The **Inspector** tab has a second button next to *Inspect*: **Why isn't it cached?** It fetches the page twice as an anonymous visitor and reports whether a cache answered the second time. If none did, it lists what stops caching, worst first: cookies set on an anonymous visit (by name only, never the value), `Cache-Control: private`, `no-store` or `no-cache`, `Vary: Cookie`, error status codes, query strings, and what Cloudflare says (`DYNAMIC`, `BYPASS`).
+
 ### Cloudflare extras
 
 With Cloudflare set up, Settings → PurgeKit → Settings has a **Cloudflare tools** panel: purge by URL prefix (`example.com/blog/`) or by cache tag (all plans), switch **development mode** on or off (it ends by itself after three hours), and see whether **Automatic Platform Optimization** is on. Development mode and the APO status need a token that can also read zone settings; the purge works with a purge-only token.

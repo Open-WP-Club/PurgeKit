@@ -307,3 +307,19 @@
 		columns: 1;
 	}
 }
+
+/* Cache report */
+.purgekit-findings {
+	margin: 14px 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-finding {
+	padding: 8px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-finding:first-child {
+	border-top: 0;
+}
