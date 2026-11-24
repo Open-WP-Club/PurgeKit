@@ -1,0 +1,42 @@
+{
+	"name": "purgekit/purgekit",
+	"description": "One control centre for every cache layer on a WordPress site.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=8.0"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.6",
+		"brain/monkey": "^2.6",
+		"wp-coding-standards/wpcs": "^3.0",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+		"phpstan/phpstan": "^1.11 || ^2.0",
+		"szepeviktor/phpstan-wordpress": "*",
+		"php-stubs/wp-cli-stubs": "*",
+		"yoast/phpunit-polyfills": "*"
+	},
+	"autoload": {
+		"psr-4": {
+			"PurgeKit\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"PurgeKit\\Tests\\": "tests/"
+		}
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		},
+		"platform": {
+			"php": "8.0.30"
+		}
+	},
+	"scripts": {
+		"test": "phpunit --testsuite unit",
+		"lint": "phpcs",
+		"analyse": "phpstan analyse --memory-limit=512M"
+	}
+}
