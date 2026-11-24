@@ -1,6 +1,6 @@
 {
 	"name": "purgekit",
-	"private": true,
+	"private": false,
 	"license": "GPL-2.0-or-later",
 	"scripts": {
 		"build": "wp-scripts build assets/src/index.js --output-path=build",
