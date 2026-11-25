@@ -67,8 +67,9 @@ final class OpcacheLayer extends AbstractLayer implements Metrics {
 		$total  = $used + $free + $wasted;
 		$out    = array(
 			array(
-				'label' => 'Scripts cached',
-				'value' => number_format( (int) ( $stats['num_cached_scripts'] ?? 0 ) ) . ( isset( $stats['max_cached_keys'] ) ? ' of ' . number_format( (int) $stats['max_cached_keys'] ) . ' slots' : '' ),
+				'label'  => 'Scripts cached',
+				'value'  => number_format( (int) ( $stats['num_cached_scripts'] ?? 0 ) ) . ( isset( $stats['max_cached_keys'] ) ? ' of ' . number_format( (int) $stats['max_cached_keys'] ) . ' slots' : '' ),
+				'number' => (int) ( $stats['num_cached_scripts'] ?? 0 ),
 			),
 			array(
 				'label'   => 'Hit rate',

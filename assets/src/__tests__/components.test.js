@@ -1003,3 +1003,17 @@ test( 'Impact lists the numbers of every cache layer', async () => {
 	expect( within( row ).getByText( '40' ) ).toBeInTheDocument();
 	expect( screen.getByRole( 'img', { name: '9 ok, 1 failed' } ) ).toBeInTheDocument();
 } );
+
+
+test( 'Layers draw how a figure moved when there are saved points, and nothing for a single point', async () => {
+	api.getLayers.mockResolvedValue( [ { id: 'object-cache', label: 'Object cache', tier: 10, tier_label: 'Object cache', detected: true, enabled: true, order: 1, last: null, checked: null } ] );
+	api.getLayerStats.mockResolvedValue( {
+		days: 30,
+		layers: {},
+		metrics: { 'object-cache': [ { label: 'Keys', value: '1,200', number: 1200 }, { label: 'Hit rate', value: '90.0%', percent: 90, meter: 'quality' } ] },
+		series: { 'object-cache': { Keys: [ [ 1000, 900 ], [ 90000, 1200 ] ], 'Hit rate': [ [ 1000, 90 ] ] } },
+	} );
+	render( <Layers /> );
+	expect( await screen.findByRole( 'img', { name: /keys over the last 1 days: from 900 to 1200/i } ) ).toBeInTheDocument();
+	expect( screen.queryByRole( 'img', { name: /hit rate over/i } ) ).not.toBeInTheDocument();
+} );

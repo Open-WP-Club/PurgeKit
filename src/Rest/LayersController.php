@@ -100,10 +100,13 @@ final class LayersController extends AbstractController {
 				$live[ $layer->id() ] = array();
 			}
 		}
+		// Someone is looking, so the history gets a point now if the last one is old enough.
+		$this->services->sampler->sample( time() );
 		return array(
 			'days'    => $days,
 			'layers'  => (object) LayerStats::summarise( $this->services->history->since( $since ) ),
 			'metrics' => (object) $live,
+			'series'  => (object) array_map( static fn( $s ) => (object) $s, $this->services->sampler->series() ),
 		);
 	}
 

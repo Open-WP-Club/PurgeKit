@@ -47,8 +47,30 @@ export function Meter( { percent, kind, label } ) {
 	);
 }
 
+/** A small line of how a figure moved; needs two points. A percent keeps a fixed 0-100 scale so a flat line looks flat. */
+export function Spark( { points, label, fixed } ) {
+	if ( ! points || points.length < 2 ) {
+		return null;
+	}
+	const W = 120;
+	const H = 24;
+	const vals = points.map( ( p ) => p[ 1 ] );
+	const lo = fixed ? 0 : Math.min( ...vals );
+	const hi = fixed ? 100 : Math.max( ...vals );
+	const span = hi - lo || 1;
+	const t0 = points[ 0 ][ 0 ];
+	const tSpan = points[ points.length - 1 ][ 0 ] - t0 || 1;
+	const d = points.map( ( [ t, v ], i ) => `${ i ? 'L' : 'M' }${ ( ( t - t0 ) / tSpan * W ).toFixed( 1 ) },${ ( H - 2 - ( ( v - lo ) / span ) * ( H - 4 ) ).toFixed( 1 ) }` ).join( ' ' );
+	const days = Math.max( 1, Math.round( tSpan / 86400 ) );
+	return (
+		<svg className="purgekit-spark" viewBox={ `0 0 ${ W } ${ H }` } width={ W } height={ H } role="img" aria-label={ sprintf( /* translators: 1: figure name, 2: number of days, 3: first value, 4: last value */ __( '%1$s over the last %2$d days: from %3$s to %4$s', 'purgekit' ), label, days, Math.round( vals[ 0 ] * 10 ) / 10, Math.round( vals[ vals.length - 1 ] * 10 ) / 10 ) }>
+			<path d={ d } fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+		</svg>
+	);
+}
+
 /** The numbers of one layer: live figures from the cache, and what its purges did in the period. */
-export function Numbers( { stats, metrics, days } ) {
+export function Numbers( { stats, metrics, days, series } ) {
 	const hasStats = stats && stats.purges + stats.failed > 0;
 	if ( ! hasStats && ! ( metrics && metrics.length ) ) {
 		return null;
@@ -60,6 +82,7 @@ export function Numbers( { stats, metrics, days } ) {
 					<small>{ m.label }</small>
 					<strong>{ m.value }</strong>
 					{ typeof m.percent === 'number' && <Meter percent={ m.percent } kind={ m.meter } label={ m.label } /> }
+					<Spark points={ series?.[ m.label ] } label={ m.label } fixed={ typeof m.percent === 'number' } />
 				</span>
 			) ) }
 			{ hasStats && (
@@ -86,7 +109,7 @@ export function Numbers( { stats, metrics, days } ) {
 	);
 }
 
-function Layer( { l, check, working, onAct, onToggle, stats, metrics, days } ) {
+function Layer( { l, check, working, onAct, onToggle, stats, metrics, days, series } ) {
 	const off = l.enabled === false;
 	return (
 		<li className="purgekit-layer" id={ `purgekit-layer-${ l.id }` }>
@@ -102,7 +125,7 @@ function Layer( { l, check, working, onAct, onToggle, stats, metrics, days } ) {
 					) }
 				</div>
 				<Outcome label={ __( 'Last purge', 'purgekit' ) } result={ l.last } empty={ __( 'No purge recorded yet', 'purgekit' ) } />
-				<Numbers stats={ stats } metrics={ metrics } days={ days } />
+				<Numbers stats={ stats } metrics={ metrics } days={ days } series={ series } />
 				<Outcome label={ __( 'Last check', 'purgekit' ) } result={ check } empty={ __( 'Not checked yet', 'purgekit' ) } staleAfterDays={ STALE_DAYS } />
 			</div>
 			<div className="purgekit-layer__actions">
@@ -211,7 +234,7 @@ export default function Layers() {
 					<h3>{ g.name }</h3>
 					<ul className="purgekit-layer-list">
 						{ g.layers.map( ( l ) => (
-							<Layer key={ l.id } l={ l } stats={ numbers.layers?.[ l.id ] } metrics={ numbers.metrics?.[ l.id ] } days={ numbers.days } check={ checks[ l.id ] || l.checked } working={ busy[ l.id ] } onAct={ act } onToggle={ toggle } />
+							<Layer key={ l.id } l={ l } stats={ numbers.layers?.[ l.id ] } metrics={ numbers.metrics?.[ l.id ] } series={ numbers.series?.[ l.id ] } days={ numbers.days } check={ checks[ l.id ] || l.checked } working={ busy[ l.id ] } onAct={ act } onToggle={ toggle } />
 						) ) }
 					</ul>
 				</section>

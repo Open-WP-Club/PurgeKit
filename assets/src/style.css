@@ -1051,3 +1051,9 @@
 .purgekit-impact__stack .is-bad {
 	background: #d63638;
 }
+
+.purgekit-spark {
+	display: block;
+	margin-top: 4px;
+	color: #2271b1;
+}

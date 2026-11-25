@@ -61,8 +61,9 @@ final class ApcuLayer extends AbstractLayer implements Metrics {
 		$lookups = $status['hits'] + $status['misses'];
 		$out     = array(
 			array(
-				'label' => 'Entries',
-				'value' => number_format( $status['entries'] ),
+				'label'  => 'Entries',
+				'value'  => number_format( $status['entries'] ),
+				'number' => $status['entries'],
 			),
 			array(
 				'label' => 'Hit rate',

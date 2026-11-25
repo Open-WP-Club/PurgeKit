@@ -180,7 +180,7 @@ final class Plugin {
 	}
 
 	private static function clear_cron(): void {
-		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE ) as $hook ) {
+		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE, Wp\Cron::SAMPLE ) as $hook ) {
 			wp_clear_scheduled_hook( $hook );
 		}
 	}

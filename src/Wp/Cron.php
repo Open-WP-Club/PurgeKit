@@ -9,9 +9,10 @@ use PurgeKit\History\Repository;
 use PurgeKit\Settings\Settings;
 
 final class Cron {
-	public const FLUSH = 'purgekit_scheduled_flush';
-	public const SCAN  = 'purgekit_scan';
-	public const PRUNE = 'purgekit_prune';
+	public const FLUSH  = 'purgekit_scheduled_flush';
+	public const SCAN   = 'purgekit_scan';
+	public const PRUNE  = 'purgekit_prune';
+	public const SAMPLE = 'purgekit_sample';
 
 	private const RECURRENCE = array(
 		'hourly' => 'hourly',
@@ -27,7 +28,8 @@ final class Cron {
 		private Flusher $flusher,
 		private Queue $queue,
 		private FileScanner $scanner,
-		private Repository $history
+		private Repository $history,
+		private ?\PurgeKit\Core\MetricSampler $sampler = null
 	) {}
 
 	public function register(): void {
@@ -35,6 +37,7 @@ final class Cron {
 		add_action( self::FLUSH, array( $this, 'run_flush' ) );
 		add_action( self::SCAN, array( $this, 'run_scan' ) );
 		add_action( self::PRUNE, array( $this, 'run_prune' ) );
+		add_action( self::SAMPLE, array( $this, 'run_sample' ) );
 		// Pick up mode/schedule changes made outside the settings UI (WP-CLI, direct option writes).
 		foreach ( array( 'mode', 'schedule' ) as $key ) {
 			$option = WpStore::PREFIX . $key;
@@ -69,6 +72,7 @@ final class Cron {
 		add_filter( 'cron_schedules', array( $this, 'schedules' ) ); // phpcs:ignore WordPress.WP.CronInterval.ChangeDetected
 		$this->ensure( self::SCAN, 'hourly' );
 		$this->ensure( self::PRUNE, 'daily' );
+		$this->ensure( self::SAMPLE, 'hourly' );
 		if ( 'scheduled' === $this->settings->mode() ) {
 			$this->ensure( self::FLUSH, self::RECURRENCE[ $this->settings->schedule() ] );
 		} else {
@@ -84,6 +88,10 @@ final class Cron {
 		if ( $this->scanner->scan() ) {
 			$this->queue->add( Change::siteWide( 'files' ) );
 		}
+	}
+
+	public function run_sample(): void {
+		$this->sampler?->sample( time() );
 	}
 
 	public function run_prune(): void {

@@ -52,8 +52,9 @@ final class TransientsLayer extends AbstractLayer implements Metrics {
 		$count = $this->transients->count();
 		return array(
 			array(
-				'label' => 'In the database',
-				'value' => number_format( $count['total'] ),
+				'label'  => 'In the database',
+				'value'  => number_format( $count['total'] ),
+				'number' => $count['total'],
 			),
 			array(
 				'label' => 'Expired',

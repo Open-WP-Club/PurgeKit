@@ -32,7 +32,7 @@ final class Uninstaller {
 		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}purgekit_history" );
 		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'purgekit_' ) . '%' ) );
 		// phpcs:enable
-		foreach ( array( Cron::FLUSH, Cron::SCAN, Cron::PRUNE, 'purgekit_warm', 'purgekit_scheduled_purge', 'purgekit_deferred_job' ) as $hook ) {
+		foreach ( array( Cron::FLUSH, Cron::SCAN, Cron::PRUNE, Cron::SAMPLE, 'purgekit_warm', 'purgekit_scheduled_purge', 'purgekit_deferred_job' ) as $hook ) {
 			wp_unschedule_hook( $hook );
 		}
 	}

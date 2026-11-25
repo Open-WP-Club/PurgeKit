@@ -133,9 +133,35 @@ final class NewRoutesTest extends \WP_UnitTestCase {
 		$this->assertSame( 50, $d['layers']->{'object-cache'}['success_rate'] );
 		$kinds = array_column( $d['metrics']->{'object-cache'}, 'label' );
 		$this->assertContains( 'Kind', $kinds );
+		$this->assertObjectHasProperty( 'series', (object) $d );
 		$this->assertSame( 400, $this->call( 'GET', '/layers/stats', array( 'days' => 5 ) )->get_status() );
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
 		$this->assertSame( 403, $this->call( 'GET', '/layers/stats' )->get_status() );
+	}
+
+	public function test_the_figures_are_saved_for_a_history_and_the_hourly_sample_is_scheduled(): void {
+		$this->svc->store->delete( 'metric_series' );
+		$this->svc->store->set( 'opcache_enabled', true );
+		$this->svc->sampler->sample( time() );
+		$series = $this->call( 'GET', '/layers/stats' )->get_data()['series'];
+		$this->svc->store->delete( 'opcache_enabled' );
+		$this->svc->store->delete( 'metric_series' );
+		$this->assertIsObject( $series );
+
+		$this->svc->cron->sync();
+		$this->assertNotFalse( wp_next_scheduled( \PurgeKit\Wp\Cron::SAMPLE ) );
+	}
+
+	public function test_the_real_object_cache_reader_reports_the_plain_wordpress_cache_here(): void {
+		$info = new \PurgeKit\Layers\WpObjectCacheInfo();
+		$d    = $info->describe();
+		$this->assertIsBool( $d['persistent'] );
+		$this->assertContains( $d['backend'], array( 'none', 'redis', 'memcached', 'other' ) );
+		$this->assertNotSame( '', $d['driver'] );
+		if ( ! $d['persistent'] ) {
+			$this->assertNull( $info->server() );
+			$this->assertNull( $info->responding() );
+		}
 	}
 
 	public function test_a_flush_storm_shows_up_and_can_be_reset(): void {

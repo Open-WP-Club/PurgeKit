@@ -6,6 +6,7 @@ use PurgeKit\Core\EnvironmentGuard;
 use PurgeKit\Core\DeferredJobs;
 use PurgeKit\Core\Executor;
 use PurgeKit\Core\FailureStreaks;
+use PurgeKit\Core\MetricSampler;
 use PurgeKit\Core\Health;
 use PurgeKit\Core\Flusher;
 use PurgeKit\Core\Planner;
@@ -70,6 +71,7 @@ final class Services {
 	public FileScanner $scanner;
 	public Flusher $flusher;
 	public Cron $cron;
+	public MetricSampler $sampler;
 	public Warmer $warmer;
 	public Inspector $inspector;
 	public Cacheability $cacheability;
@@ -176,7 +178,8 @@ final class Services {
 		$dirs       = apply_filters( 'purgekit_fingerprint_dirs', array( get_theme_root(), WP_PLUGIN_DIR ) );
 		$exts       = apply_filters( 'purgekit_fingerprint_extensions', array( 'php', 'js', 'css', 'json', 'html' ) );
 		$s->scanner = new FileScanner( $s->store, (array) $dirs, (array) $exts );
-		$s->cron    = new Cron( $s->settings, $s->flusher, $s->queue, $s->scanner, $s->history );
+		$s->sampler = new MetricSampler( $s->registry, $s->store );
+		$s->cron    = new Cron( $s->settings, $s->flusher, $s->queue, $s->scanner, $s->history, $s->sampler );
 		return $s;
 	}
 }

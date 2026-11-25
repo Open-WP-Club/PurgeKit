@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.2.2
+Stable tag: 0.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,12 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.2.3 =
+* New: live Redis figures in the Object cache layer: server and version (Redis, Valkey and other Redis-compatible servers, through the Redis Object Cache plugin), hit rate, memory against maxmemory, keys, evicted keys, clients and uptime.
+* New: the connection check fails when a Redis object cache is installed but does not answer, and warns when its memory is nearly full or it is throwing keys away.
+* New: a small line shows how each figure moved (hit rate, memory, keys, entries, scripts) over up to two weeks. The figures are saved hourly by WP-Cron, and also when you open the Layers tab.
+* Note: other object cache drop-ins (for example Memcached) are named but not asked for figures. A purge from the command line cannot read the web server's OPcache or APCu, so the history only fills from web requests and WP-Cron over HTTP.
 
 = 0.2.2 =
 * New: numbers for every cache layer. OPcache, APCu, transients and the object cache show entries, hit rate and memory (with a bar that turns red when memory runs out); every layer shows its purges, failures and average time over the last 30 days.
