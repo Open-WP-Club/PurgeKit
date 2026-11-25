@@ -45,7 +45,9 @@ final class RuleSet {
 				array_values( array_intersect( self::strings( $item['on'] ?? array() ), array_keys( Rule::TRIGGERS ) ) ),
 				self::strings( $item['post_types'] ?? array(), '/^[a-z0-9_\-]{1,20}$/' ),
 				$action,
-				$layers
+				$layers,
+				max( 0, min( Rule::MAX_DELAY, (int) ( $item['delay'] ?? 0 ) ) ),
+				in_array( $item['when'] ?? null, Rule::WHEN, true ) ? (string) $item['when'] : Rule::ALWAYS
 			);
 		}
 		return new self( $rules );
@@ -74,7 +76,7 @@ final class RuleSet {
 	public function route( array $changes, Planner $planner ): array {
 		return array_map(
 			static function ( array $job ): array {
-				unset( $job['rules'] );
+				unset( $job['rules'], $job['delay'], $job['when'] );
 				return $job;
 			},
 			$this->routeDetailed( $changes, $planner )['jobs']
@@ -86,7 +88,7 @@ final class RuleSet {
 	 * An empty `rules` list means the changes took the default route (no rule matched).
 	 *
 	 * @param Change[] $changes
-	 * @return array{jobs:array<int,array{plan:PurgePlan,layers:?array,rules:string[]}>,skipped:array<int,array{type:string,rule:string,urls:string[]}>}
+	 * @return array{jobs:array<int,array{plan:PurgePlan,layers:?array,rules:string[],delay:int,when:string}>,skipped:array<int,array{type:string,rule:string,urls:string[]}>}
 	 */
 	public function routeDetailed( array $changes, Planner $planner ): array {
 		$buckets = array();
@@ -104,11 +106,15 @@ final class RuleSet {
 			}
 			$layers = $rule ? $rule->layers : array();
 			sort( $layers );
-			$key = $action . '|' . implode( ',', $layers );
+			$delay = $rule ? $rule->delay : 0;
+			$when  = $rule ? $rule->when : Rule::ALWAYS;
+			$key   = $action . '|' . implode( ',', $layers ) . '|' . $delay . '|' . $when;
 			if ( ! isset( $buckets[ $key ] ) ) {
 				$buckets[ $key ] = array(
 					'action'  => $action,
 					'layers'  => $layers,
+					'delay'   => $delay,
+					'when'    => $when,
 					'changes' => array(),
 					'rules'   => array(),
 				);
@@ -133,8 +139,10 @@ final class RuleSet {
 				'plan'   => $plan,
 				'layers' => array() === $bucket['layers'] ? null : $bucket['layers'],
 				'rules'  => array_map( 'strval', array_keys( $bucket['rules'] ) ),
+				'delay'  => $bucket['delay'],
+				'when'   => $bucket['when'],
 			);
-			if ( $plan->all && null === $job['layers'] ) {
+			if ( $plan->all && null === $job['layers'] && 0 === $job['delay'] && Rule::ALWAYS === $job['when'] ) {
 				return array(
 					'jobs'    => array( $job ), // Purging everything everywhere covers all other jobs.
 					'skipped' => $skipped,

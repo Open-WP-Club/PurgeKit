@@ -2,7 +2,10 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import * as api from '../api';
-import Status from '../components/Status';
+import Dashboard from '../components/Dashboard';
+import Health from '../components/Health';
+import Wizard from '../components/Wizard';
+import Impact from '../components/Impact';
 import Layers from '../components/Layers';
 import Settings from '../components/Settings';
 import History from '../components/History';
@@ -17,22 +20,78 @@ jest.mock( '../api' );
 
 afterEach( () => jest.resetAllMocks() );
 
-test( 'Status shows pending count and Flush now calls flush()', async () => {
-	api.getStatus.mockResolvedValue( { pending: 3, mode: 'notify', layers_active: 2, last_run: null } );
-	api.flush.mockResolvedValue( { status: 'ok', results: [] } );
-	render( <Status /> );
-	expect( await screen.findByText( /3 pending/i ) ).toBeInTheDocument();
+/** Settings is split into sections; open one by the name on its button. */
+const section = async ( name ) => userEvent.click( await screen.findByRole( 'button', { name: new RegExp( `^${ name }`, 'i' ) } ) );
+
+const STATUS = {
+	pending: 3, mode: 'notify', schedule: 'daily', layers_active: 2, layers_failing: 0, last_run: null, onboarded: true, delayed: 0,
+	stats: { day: { ok: 2, failed: 1 }, week: [ { date: '2026-11-19', total: 0, problems: 0 }, { date: '2026-11-25', total: 3, problems: 1 } ] },
+	recent: [], storm: null, paused: null,
+};
+
+test( 'Dashboard shows the tiles, and Flush now asks for a confirmation that lists the layers before purging', async () => {
+	api.getStatus.mockResolvedValue( { ...STATUS, last_run: { id: 1, status: 'ok', source: 'manual', created_at: '2026-11-25 10:00:00' } } );
+	api.getLayers.mockResolvedValue( [] );
+	api.previewFlush.mockResolvedValue( { pending: 0, empty: false, all: true, jobs: [ { rules: [], all: true, urls: [], urls_total: 0, layers: [ { id: 'cloudflare', label: 'Cloudflare', skipped: null }, { id: 'varnish', label: 'Varnish', skipped: 'Switched off in the layer map.' } ] } ], skipped: [] } );
+	api.flush.mockResolvedValue( { status: 'ok', all: true, urls: [], deferred: 0, results: [ { layer: 'cloudflare', status: 'ok', message: '', ms: 12 } ], verification: { status: 'verified', message: 'Verified 1 of 1 pages.' } } );
+	render( <Dashboard /> );
+	expect( await screen.findByText( /pending changes/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /manual flush/i ) ).toBeInTheDocument();
 	await userEvent.click( screen.getByRole( 'button', { name: /flush now/i } ) );
+	expect( api.flush ).not.toHaveBeenCalled(); // Only the confirmation is open.
+	expect( api.previewFlush ).toHaveBeenCalledWith( true );
+	expect( await screen.findByText( /switched off in the layer map/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /^purge everything$/i } ) );
 	expect( api.flush ).toHaveBeenCalledTimes( 1 );
-	expect( ( await screen.findAllByText( /flush ok/i ) ).length ).toBeGreaterThan( 0 ); // Notice also speaks via an a11y live region.
+	expect( await screen.findByText( /verified 1 of 1 pages/i ) ).toBeInTheDocument();
+	expect( screen.getByText( 'Fresh' ) ).toBeInTheDocument();
 } );
 
-test( 'Status shows an error when the flush is locked', async () => {
-	api.getStatus.mockResolvedValue( { pending: 0, mode: 'notify', layers_active: 1, last_run: null } );
-	api.flush.mockRejectedValue( { message: 'Another flush is running' } );
-	render( <Status /> );
+test( 'Dashboard: cancelling the confirmation purges nothing', async () => {
+	api.getStatus.mockResolvedValue( STATUS );
+	api.getLayers.mockResolvedValue( [] );
+	api.previewFlush.mockResolvedValue( { pending: 0, empty: false, all: true, jobs: [ { rules: [], all: true, urls: [], urls_total: 0, layers: [ { id: 'a', label: 'A', skipped: null } ] } ], skipped: [] } );
+	render( <Dashboard /> );
 	await userEvent.click( await screen.findByRole( 'button', { name: /flush now/i } ) );
-	expect( ( await screen.findAllByText( /another flush is running/i ) ).length ).toBeGreaterThan( 0 );
+	await userEvent.click( await screen.findByRole( 'button', { name: /^cancel$/i } ) );
+	expect( api.flush ).not.toHaveBeenCalled();
+} );
+
+test( 'Dashboard: a failed layer can be retried on its own, for the same URLs', async () => {
+	api.getStatus.mockResolvedValue( STATUS );
+	api.getLayers.mockResolvedValue( [ { id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: true, order: 1 } ] );
+	api.previewFlush.mockResolvedValue( { pending: 0, empty: false, all: true, jobs: [ { rules: [], all: true, urls: [], urls_total: 0, layers: [ { id: 'cloudflare', label: 'Cloudflare', skipped: null } ] } ], skipped: [] } );
+	api.flush.mockResolvedValue( { status: 'partial', all: true, urls: [], deferred: 0, results: [ { layer: 'object-cache', status: 'ok', message: '', ms: 1 }, { layer: 'cloudflare', status: 'failed', message: 'Rate limited', ms: 9 } ] } );
+	api.retryFlush.mockResolvedValue( { status: 'ok', all: true, urls: [], deferred: 0, results: [ { layer: 'cloudflare', status: 'ok', message: '', ms: 9 } ] } );
+	render( <Dashboard /> );
+	await userEvent.click( await screen.findByRole( 'button', { name: /flush now/i } ) );
+	await userEvent.click( await screen.findByRole( 'button', { name: /^purge everything$/i } ) );
+	expect( await screen.findByText( /rate limited/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /retry 1 failed layer/i } ) );
+	expect( api.retryFlush ).toHaveBeenCalledWith( [ 'cloudflare' ], [] );
+	await waitFor( () => expect( screen.queryByRole( 'button', { name: /retry/i } ) ).not.toBeInTheDocument() );
+} );
+
+test( 'Dashboard: a flush storm is shown and can be resumed', async () => {
+	api.getStatus.mockResolvedValue( { ...STATUS, storm: { at: 1, count: 5, window: 600, source: 'auto', paused: true } } );
+	api.getLayers.mockResolvedValue( [] );
+	api.resetStorm.mockResolvedValue( { storm: null } );
+	render( <Dashboard /> );
+	expect( await screen.findByText( /5 full flushes in 10 minutes/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /resume automatic flushing/i } ) );
+	expect( api.resetStorm ).toHaveBeenCalled();
+} );
+
+test( 'Dashboard shows an error when the status cannot be loaded, and who started recent flushes', async () => {
+	api.getStatus.mockRejectedValueOnce( { message: 'Sorry, you are not allowed' } );
+	api.getLayers.mockResolvedValue( [] );
+	const { unmount } = render( <Dashboard /> );
+	expect( ( await screen.findAllByText( /not allowed/i ) ).length ).toBeGreaterThan( 0 );
+	unmount();
+	api.getStatus.mockResolvedValue( { ...STATUS, recent: [ { id: 4, status: 'ok', source: 'manual', created_at: '2026-11-25 10:00:00', trigger: { user: { id: 1, name: 'anna' }, rules: [ 'Plugin first' ] } } ] } );
+	api.getLayers.mockResolvedValue( [] );
+	render( <Dashboard /> );
+	expect( await screen.findByText( /by anna · rule: Plugin first/ ) ).toBeInTheDocument();
 } );
 
 test( 'Layers: detected layers are listed, the others are folded away', async () => {
@@ -54,6 +113,7 @@ test( 'Settings never renders a stored token and omits it when blank', async () 
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
+	await section( 'connections' );
 	expect( await screen.findByText( /token set/i ) ).toBeInTheDocument();
 	expect( screen.getByLabelText( /cloudflare api token/i ) ).toHaveValue( '' );
 	await userEvent.click( screen.getByRole( 'button', { name: /save/i } ) );
@@ -68,6 +128,7 @@ test( 'Settings sends a newly typed token', async () => {
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
+	await section( 'connections' );
 	await userEvent.type( await screen.findByLabelText( /cloudflare api token/i ), 'abc' );
 	await userEvent.click( screen.getByRole( 'button', { name: /save/i } ) );
 	await waitFor( () => expect( api.saveSettings.mock.calls[ 0 ][ 0 ].cloudflare_token ).toBe( 'abc' ) );
@@ -82,8 +143,9 @@ test( 'History renders statuses and layer results', async () => {
 		],
 	} );
 	render( <History /> );
-	expect( await screen.findByText( 'partial' ) ).toBeInTheDocument();
-	expect( screen.getByText( 'ok' ) ).toBeInTheDocument();
+	const list = await screen.findByRole( 'list' );
+	expect( within( list ).getByText( 'Partial' ) ).toBeInTheDocument();
+	expect( within( list ).getByText( 'OK' ) ).toBeInTheDocument();
 	expect( screen.getByText( /bad zone/ ) ).toBeInTheDocument();
 } );
 
@@ -115,6 +177,7 @@ test( 'Settings shows the webhook URL, and the key with a curl example after rot
 	} );
 	api.rotateWebhookKey.mockResolvedValue( { key: 'KEY123', url: 'https://a.test/wp-json/purgekit/v1/webhook/flush' } );
 	render( <Settings /> );
+	await section( 'connections' );
 	expect( await screen.findByText( 'https://a.test/wp-json/purgekit/v1/webhook/flush' ) ).toBeInTheDocument();
 	expect( screen.queryByText( /KEY123/ ) ).not.toBeInTheDocument();
 	await userEvent.click( screen.getByRole( 'button', { name: /rotate deploy webhook key/i } ) );
@@ -129,6 +192,7 @@ test( 'Settings can look up the Cloudflare zone and fills it in without saving',
 	} );
 	api.findCloudflareZone.mockResolvedValue( { zone: 'zone999', message: '' } );
 	render( <Settings /> );
+	await section( 'connections' );
 	await userEvent.click( await screen.findByRole( 'button', { name: /find zone id/i } ) );
 	expect( await screen.findByDisplayValue( 'zone999' ) ).toBeInTheDocument();
 	expect( api.saveSettings ).not.toHaveBeenCalled();
@@ -171,6 +235,7 @@ test( 'Settings only sends the keys that changed, so inherited network defaults 
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
+	await section( 'connections' );
 	await userEvent.type( await screen.findByLabelText( /cloudflare zone id/i ), 'zone1' );
 	await userEvent.click( screen.getByRole( 'button', { name: /^save$/i } ) );
 	await waitFor( () => expect( api.saveSettings ).toHaveBeenCalled() );
@@ -186,6 +251,7 @@ test( 'Settings: Slack webhook is never rendered, only sent when typed, and the 
 	api.saveSettings.mockResolvedValue( {} );
 	api.testAlerts.mockResolvedValue( { channels: [ 'slack' ], results: { slack: 'ok', email: 'The mail was not accepted for delivery.' } } );
 	render( <Settings /> );
+	await section( 'alerts' );
 	expect( await screen.findByText( /webhook set/i ) ).toBeInTheDocument();
 	expect( screen.getByLabelText( /slack incoming webhook url/i ) ).toHaveValue( '' );
 	await userEvent.click( screen.getByRole( 'button', { name: /send test alert/i } ) );
@@ -225,6 +291,8 @@ test( 'Settings: provider secrets are never shown, only changed fields are sent'
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
+	await section( 'connections' );
+	await userEvent.click( await screen.findByText( 'Bunny CDN' ) );
 	expect( await screen.findByLabelText( /bunny pull zone id/i ) ).toHaveValue( '42' );
 	expect( screen.getByLabelText( /bunny account api key/i ) ).toHaveValue( '' );
 	await userEvent.click( screen.getByRole( 'button', { name: /^save$/i } ) );
@@ -269,13 +337,14 @@ const PREVIEW = {
 	skipped: [ { type: 'comment', rule: 'Quiet comments', urls: [] } ],
 };
 
-test( 'Status: Preview shows the plan, rule names, layers and skipped changes without flushing', async () => {
-	api.getStatus.mockResolvedValue( { pending: 3, mode: 'notify', layers_active: 2, last_run: null } );
+test( 'Dashboard: Preview shows the plan, rule names, layers and skipped changes without flushing', async () => {
+	api.getStatus.mockResolvedValue( STATUS );
+	api.getLayers.mockResolvedValue( [] );
 	api.previewFlush.mockResolvedValue( PREVIEW );
-	render( <Status /> );
+	render( <Dashboard /> );
 	await userEvent.click( await screen.findByRole( 'button', { name: /^preview$/i } ) );
 	expect( await screen.findByText( /by rule: Posts to the CDN/ ) ).toBeInTheDocument();
-	expect( screen.getByText( /Cloudflare/ ) ).toBeInTheDocument();
+	expect( screen.getAllByText( /Cloudflare/ ).length ).toBeGreaterThan( 0 );
 	expect( screen.getByText( 'https://a.test/x/' ) ).toBeInTheDocument();
 	expect( screen.getByText( /by default \(no rule\)/ ) ).toBeInTheDocument();
 	expect( screen.getByText( /comment \(rule: Quiet comments\)/ ) ).toBeInTheDocument();
@@ -283,9 +352,10 @@ test( 'Status: Preview shows the plan, rule names, layers and skipped changes wi
 } );
 
 test( 'Preview says so when nothing would be purged, and shows errors', async () => {
-	api.getStatus.mockResolvedValue( { pending: 0, mode: 'notify', layers_active: 1, last_run: null } );
+	api.getStatus.mockResolvedValue( STATUS );
+	api.getLayers.mockResolvedValue( [] );
 	api.previewFlush.mockResolvedValueOnce( { ...PREVIEW, pending: 0, empty: true, jobs: [], skipped: [] } );
-	render( <Status /> );
+	render( <Dashboard /> );
 	await userEvent.click( await screen.findByRole( 'button', { name: /^preview$/i } ) );
 	expect( await screen.findByText( /nothing would be purged/i ) ).toBeInTheDocument();
 	api.previewFlush.mockRejectedValueOnce( new Error( 'Sorry, you are not allowed' ) );
@@ -313,7 +383,8 @@ test( 'History shows the verification result per flush', async () => {
 		],
 	} );
 	render( <History /> );
-	expect( await screen.findByText( /Stale copy: Cloudflare still serves a stale copy/ ) ).toBeInTheDocument();
+	expect( await screen.findByText( 'Stale copy' ) ).toBeInTheDocument();
+	expect( screen.getByText( /Cloudflare still serves a stale copy/ ) ).toBeInTheDocument();
 	expect( screen.getByText( 'Verified' ) ).toBeInTheDocument();
 } );
 
@@ -357,7 +428,7 @@ test( 'Settings: no reset buttons on a single site', async () => {
 		multisite: false, overridden: [],
 	} );
 	render( <Settings /> );
-	await screen.findByLabelText( /when something changes/i );
+	await screen.findByRole( 'radio', { name: /flush automatically/i } );
 	expect( screen.queryByRole( 'button', { name: /reset to network default/i } ) ).not.toBeInTheDocument();
 } );
 
@@ -428,6 +499,7 @@ test( 'Settings: safety section shows the pause, adopts the new address, and sen
 	api.getSettings.mockResolvedValue( base );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
+	await section( 'protection' );
 	expect( await screen.findByText( /purges to cdns and firewalls are paused/i ) ).toBeInTheDocument();
 	await userEvent.click( screen.getByRole( 'button', { name: /this is the real site now/i } ) );
 	expect( api.saveSettings ).toHaveBeenCalledWith( { adopt_home: true } );
@@ -463,7 +535,8 @@ test( 'Settings: the OPcache switch is sent only when changed', async () => {
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
-	await userEvent.click( await screen.findByLabelText( /reset php opcache when everything is purged/i ) );
+	await section( 'caches' );
+	await userEvent.click( await screen.findByLabelText( /reset php opcache/i ) );
 	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
 	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { opcache_enabled: true } );
 } );
@@ -476,8 +549,9 @@ test( 'Settings: the APCu, transients and builder-file switches are sent only wh
 	} );
 	api.saveSettings.mockResolvedValue( {} );
 	render( <Settings /> );
-	await userEvent.click( await screen.findByLabelText( /empty apcu when everything is purged/i ) );
-	await userEvent.click( screen.getByLabelText( /delete database transients when everything is purged/i ) );
+	await section( 'caches' );
+	await userEvent.click( await screen.findByLabelText( /empty apcu/i ) );
+	await userEvent.click( screen.getByLabelText( /delete database transients/i ) );
 	await userEvent.click( screen.getByLabelText( /clear page-builder and minifier files/i ) );
 	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
 	expect( api.saveSettings.mock.calls.at( -1 )[ 0 ] ).toEqual( { apcu_enabled: true, transients_enabled: true, builder_assets_enabled: true } );
@@ -490,7 +564,7 @@ test( 'Settings: settings fixed in wp-config.php are listed and cannot be edited
 	} );
 	render( <Settings /> );
 	expect( await screen.findByText( /set in wp-config\.php and not editable here/i ) ).toBeInTheDocument();
-	expect( screen.getByLabelText( /when something changes/i ) ).toBeDisabled();
+	expect( screen.getByRole( 'radio', { name: /flush automatically/i } ) ).toBeDisabled();
 	expect( screen.getByLabelText( /warm the cache after a purge/i ) ).toBeDisabled();
 	expect( screen.getByLabelText( /check the home page and purged pages/i ) ).not.toBeDisabled();
 } );
@@ -647,4 +721,212 @@ test( 'Inspector: the cacheability check shows an API error', async () => {
 	await userEvent.type( screen.getByLabelText( /page url/i ), 'https://elsewhere.test/' );
 	await userEvent.click( screen.getByRole( 'button', { name: /why isn.t it cached/i } ) );
 	expect( ( await screen.findAllByText( /enter a url on this site/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+test( 'Health lists the checks worst first and asks Cloudflare and Slack only when told to', async () => {
+	const local = { networked: false, worst: 'recommended', checks: [
+		{ id: 'alerts', status: 'recommended', label: 'Nobody is told when a purge fails', description: 'Add an alert email.', tab: 'settings:alerts' },
+		{ id: 'webhook_key', status: 'critical', label: 'The deploy webhook key is weak', description: 'It has only 12 characters.', tab: 'settings' },
+		{ id: 'cron', status: 'good', label: 'Cron fine', description: 'ok' },
+	] };
+	api.getHealth.mockResolvedValue( local );
+	api.runHealth.mockResolvedValue( { ...local, networked: true, checks: [ { id: 'cloudflare', status: 'critical', label: 'The Cloudflare token has expired', description: 'Create a new token.', tab: 'settings' } ] } );
+	const goTo = jest.fn();
+	render( <Health goTo={ goTo } /> );
+	const headings = ( await screen.findAllByRole( 'heading', { level: 3 } ) ).map( ( h ) => h.textContent );
+	expect( headings ).toEqual( [ 'Needs fixing', 'Should fix', 'Good' ] );
+	expect( api.runHealth ).not.toHaveBeenCalled();
+	expect( screen.getByText( /cloudflare and slack have not been asked yet/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getAllByRole( 'button', { name: /open settings/i } )[ 1 ] );
+	expect( goTo ).toHaveBeenCalledWith( 'settings:alerts' );
+	await userEvent.click( screen.getByRole( 'button', { name: /run all checks/i } ) );
+	expect( await screen.findByText( /cloudflare token has expired/i ) ).toBeInTheDocument();
+	expect( api.runHealth ).toHaveBeenCalledTimes( 1 );
+} );
+
+test( 'Wizard: shows what was found, recommends automatic flushing, and saves the choice', async () => {
+	api.getLayers.mockResolvedValue( [
+		{ id: 'wp-rocket', label: 'WP Rocket', tier: 20, tier_label: 'Cache plugin', detected: true, order: 1 },
+		{ id: 'cloudflare', label: 'Cloudflare', tier: 50, tier_label: 'CDN / edge', detected: false },
+	] );
+	api.testLayer.mockResolvedValue( { layer: 'wp-rocket', status: 'ok', message: 'Reachable' } );
+	api.saveSettings.mockResolvedValue( {} );
+	const onDone = jest.fn();
+	render( <Wizard onDone={ onDone } /> );
+	expect( await screen.findByText( 'WP Rocket' ) ).toBeInTheDocument();
+	expect( screen.queryByText( 'Cloudflare' ) ).not.toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /^next$/i } ) );
+	expect( screen.getByRole( 'radio', { name: /flush automatically/i } ) ).toBeChecked();
+	expect( screen.getByText( 'Recommended' ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'radio', { name: /notify me/i } ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /^next$/i } ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /check connections/i } ) );
+	expect( await screen.findByText( 'Reachable' ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /^finish/i } ) );
+	await waitFor( () => expect( api.saveSettings ).toHaveBeenCalledWith( { mode: 'notify', onboarded: true } ) );
+	expect( onDone ).toHaveBeenCalledWith( 'notify' );
+} );
+
+test( 'Wizard: skipping only marks the setup as done and leaves the mode alone', async () => {
+	api.getLayers.mockResolvedValue( [] );
+	api.saveSettings.mockResolvedValue( {} );
+	const onDone = jest.fn();
+	render( <Wizard onDone={ onDone } /> );
+	expect( await screen.findByText( /no cache layer was detected/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /skip setup/i } ) );
+	await waitFor( () => expect( api.saveSettings ).toHaveBeenCalledWith( { onboarded: true } ) );
+} );
+
+test( 'History says who or what started a flush', async () => {
+	api.getHistory.mockResolvedValue( {
+		total: 1,
+		items: [ { id: 9, created_at: '2026-11-25 08:00:00', source: 'auto', status: 'ok', results: [], urls: [], all: false, urls_total: 4, duration_ms: 20, trigger: { user: { id: 2, name: 'anna' }, rules: [ 'CDN later' ], changes: [ 'post' ] } } ],
+	} );
+	render( <History /> );
+	expect( await screen.findByText( 'Automatic flush' ) ).toBeInTheDocument();
+	expect( screen.getByText( 'by anna · rule: CDN later · after: post' ) ).toBeInTheDocument();
+	expect( screen.getByText( '4 URLs' ) ).toBeInTheDocument();
+} );
+
+test( 'Rules: the delay and the fallback condition are saved with the rule', async () => {
+	api.getScheduled.mockResolvedValue( [] );
+	api.getRules.mockResolvedValue( {
+		rules: [ { id: 'abcd1234', name: 'CDN later', enabled: true, on: [ 'post' ], post_types: [], action: 'default', layers: [ 'cloudflare' ], delay: 0, when: 'always' } ],
+		triggers: { post: 'A post changes' }, actions: [ 'default', 'all', 'home', 'skip' ], max: 50,
+	} );
+	api.getLayers.mockResolvedValue( [ { id: 'cloudflare', label: 'Cloudflare', tier: 50, detected: true } ] );
+	api.saveRules.mockImplementation( async ( rules ) => ( { rules, triggers: {}, actions: [], max: 50 } ) );
+	render( <Rules /> );
+	await userEvent.click( await screen.findByText( 'CDN later' ) );
+	const wait = screen.getByLabelText( /wait this many seconds/i );
+	await userEvent.clear( wait );
+	await userEvent.type( wait, '45' );
+	await userEvent.selectOptions( screen.getByLabelText( /^run$/i ), 'on_failure' );
+	await userEvent.click( screen.getByRole( 'button', { name: /save rules/i } ) );
+	await waitFor( () => expect( api.saveRules ).toHaveBeenCalled() );
+	expect( api.saveRules.mock.calls[ 0 ][ 0 ][ 0 ] ).toMatchObject( { delay: 45, when: 'on_failure' } );
+} );
+
+test( 'Settings: unsaved changes are announced, can be discarded, and the cache tag switches are sent when changed', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		cache_tags: false, soft_purge: false, webhook_key_set: true, webhook_url: 'https://a.test/hook', providers: [], guard: { paused: null },
+	} );
+	api.saveSettings.mockResolvedValue( {} );
+	render( <Settings /> );
+	await screen.findByText( /all changes are saved/i );
+	await section( 'caches' );
+	await userEvent.click( screen.getByLabelText( /^cache tags$/i ) );
+	expect( screen.getByText( /you have unsaved changes/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /discard/i } ) );
+	expect( screen.getByLabelText( /^cache tags$/i ) ).not.toBeChecked();
+	await userEvent.click( screen.getByLabelText( /^cache tags$/i ) );
+	await userEvent.click( screen.getByLabelText( /^soft purge$/i ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
+	await waitFor( () => expect( api.saveSettings ).toHaveBeenCalled() );
+	expect( api.saveSettings.mock.calls[ 0 ][ 0 ] ).toEqual( { cache_tags: true, soft_purge: true } );
+} );
+
+test( 'Impact shows the numbers, the share of targeted flushes, and reloads for another period', async () => {
+	const base = {
+		days: 30, flushes: 10, full: 2, targeted: 8, targeted_share: 80, urls: 42, problems: 1, skipped: 0, layer_purges: 30, avg_ms: 120,
+		by_source: { auto: 7, manual: 3 }, by_change: { post: 6, term: 2 },
+		per_day: [ { date: '2026-11-24', full: 1, targeted: 3, problems: 0 }, { date: '2026-11-25', full: 1, targeted: 5, problems: 1 } ],
+	};
+	api.getImpact.mockResolvedValue( base );
+	render( <Impact /> );
+	expect( await screen.findByText( '80%' ) ).toBeInTheDocument();
+	expect( screen.getByText( '42' ) ).toBeInTheDocument();
+	expect( screen.getByText( /8 of them purged only some pages, 2 purged everything/i ) ).toBeInTheDocument();
+	expect( screen.getByText( 'Automatic flush' ) ).toBeInTheDocument();
+	expect( api.getImpact ).toHaveBeenCalledWith( 30 );
+	api.getImpact.mockResolvedValue( { ...base, days: 7 } );
+	await userEvent.selectOptions( screen.getByLabelText( /period/i ), '7' );
+	await waitFor( () => expect( api.getImpact ).toHaveBeenLastCalledWith( 7 ) );
+} );
+
+test( 'Impact has an empty state and shows an error', async () => {
+	api.getImpact.mockResolvedValueOnce( { days: 30, flushes: 0, per_day: [], by_source: {}, by_change: {} } );
+	const { unmount } = render( <Impact /> );
+	expect( await screen.findByText( /nothing was purged in this time/i ) ).toBeInTheDocument();
+	unmount();
+	api.getImpact.mockRejectedValueOnce( { message: 'Sorry, you are not allowed' } );
+	render( <Impact /> );
+	expect( ( await screen.findAllByText( /not allowed/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+test( 'History: a flush can be run again, and only its failed layers can be retried', async () => {
+	api.getHistory.mockResolvedValue( {
+		total: 3,
+		items: [
+			{ id: 5, created_at: '2026-11-25 08:00:00', source: 'auto', status: 'partial', all: false, urls: [ 'https://a.test/x/' ], urls_total: 1, duration_ms: 5, results: [ { layer: 'cloudflare', status: 'failed', message: 'Rate limited' } ] },
+			{ id: 4, created_at: '2026-11-25 07:00:00', source: 'manual', status: 'ok', all: true, urls: [], urls_total: 0, duration_ms: 5, results: [] },
+			{ id: 3, created_at: '2026-11-25 06:00:00', source: 'auto', status: 'ok', all: false, urls: [ 'https://a.test/1/' ], urls_total: 300, duration_ms: 5, results: [] },
+		],
+	} );
+	api.retryFlush.mockResolvedValue( { status: 'ok' } );
+	api.replayFlush.mockResolvedValue( { status: 'ok' } );
+	render( <History /> );
+	await userEvent.click( await screen.findByRole( 'button', { name: /retry failed layers/i } ) );
+	expect( api.retryFlush ).toHaveBeenCalledWith( [ 'cloudflare' ], [ 'https://a.test/x/' ] );
+	expect( ( await screen.findAllByText( /flush ok/i ) ).length ).toBeGreaterThan( 0 );
+	const again = screen.getAllByRole( 'button', { name: /run again/i } );
+	expect( again ).toHaveLength( 3 );
+	expect( again[ 2 ] ).toBeDisabled(); // The history kept only part of that URL list.
+	await userEvent.click( again[ 1 ] );
+	expect( api.replayFlush ).toHaveBeenCalledWith( 4 );
+} );
+
+test( 'History: a replay that is refused shows the reason, and skipped flushes cannot be repeated', async () => {
+	api.getHistory.mockResolvedValue( {
+		total: 2,
+		items: [
+			{ id: 2, created_at: '2026-11-25 08:00:00', source: 'auto', status: 'skipped', all: true, urls: [], urls_total: 0, duration_ms: 0, results: [] },
+			{ id: 1, created_at: '2026-11-25 07:00:00', source: 'manual', status: 'ok', all: true, urls: [], urls_total: 0, duration_ms: 5, results: [] },
+		],
+	} );
+	api.replayFlush.mockRejectedValue( { message: 'Another flush is running' } );
+	render( <History /> );
+	const buttons = await screen.findAllByRole( 'button', { name: /run again/i } );
+	expect( buttons ).toHaveLength( 1 );
+	await userEvent.click( buttons[ 0 ] );
+	expect( ( await screen.findAllByText( /another flush is running/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+test( 'Settings: Discord, Teams and the JSON webhook are sent only when typed, and can be removed', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		alert_email: '', alert_on: 'problems', slack_webhook_set: false, discord_webhook_set: true, teams_webhook_set: false, alert_webhook_set: false,
+		webhook_key_set: true, providers: [], guard: { paused: null },
+	} );
+	api.saveSettings.mockResolvedValue( {} );
+	render( <Settings /> );
+	await section( 'alerts' );
+	expect( await screen.findByLabelText( /discord webhook url/i ) ).toHaveValue( '' );
+	expect( screen.getByText( /webhook set\. leave blank to keep it/i ) ).toBeInTheDocument();
+	await userEvent.type( screen.getByLabelText( /microsoft teams webhook url/i ), 'https://x.logic.azure.com/workflows/a' );
+	await userEvent.type( screen.getByLabelText( /webhook url \(json\)/i ), 'https://hooks.example.com/a' );
+	await userEvent.click( screen.getByRole( 'button', { name: /^save/i } ) );
+	await waitFor( () => expect( api.saveSettings ).toHaveBeenCalled() );
+	expect( api.saveSettings.mock.calls[ 0 ][ 0 ] ).toEqual( { teams_webhook_url: 'https://x.logic.azure.com/workflows/a', alert_webhook_url: 'https://hooks.example.com/a' } );
+	await userEvent.click( screen.getByRole( 'button', { name: /remove discord webhook/i } ) );
+	expect( api.saveSettings ).toHaveBeenLastCalledWith( { clear_alert_channel: 'discord' } );
+} );
+
+test( 'Settings: reloading assets asks first, then bumps the version and says what happened', async () => {
+	api.getSettings.mockResolvedValue( {
+		mode: 'notify', schedule: 'daily', skip_if_unchanged: true, warm_enabled: true, cloudflare_zone: '', varnish_enabled: false,
+		asset_version: 0, providers: [], guard: { paused: null },
+	} );
+	api.bumpAssets.mockResolvedValue( { status: 'ok', version: 1900000000 } );
+	render( <Settings /> );
+	await section( 'caches' );
+	await userEvent.click( await screen.findByRole( 'button', { name: /reload assets/i } ) );
+	expect( api.bumpAssets ).not.toHaveBeenCalled();
+	await userEvent.click( screen.getByRole( 'button', { name: /^cancel$/i } ) );
+	expect( api.bumpAssets ).not.toHaveBeenCalled();
+	await userEvent.click( screen.getByRole( 'button', { name: /reload assets/i } ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /reload and purge everything/i } ) );
+	expect( api.bumpAssets ).toHaveBeenCalledTimes( 1 );
+	expect( ( await screen.findAllByText( /browsers fetch the css and javascript files again/i ) ).length ).toBeGreaterThan( 0 );
 } );

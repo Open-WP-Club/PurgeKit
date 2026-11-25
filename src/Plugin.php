@@ -9,6 +9,7 @@ use PurgeKit\Admin\Menu;
 use PurgeKit\Admin\Notices;
 use PurgeKit\Admin\NetworkPage;
 use PurgeKit\Detect\Hooks;
+use PurgeKit\Detect\TagHeaders;
 use PurgeKit\Rest\Router;
 
 final class Plugin {
@@ -43,6 +44,9 @@ final class Plugin {
 		);
 		self::remember_home( $s );
 		$s->scheduler->register();
+		$s->deferrer->register();
+		( new TagHeaders( $s->settings ) )->register();
+		self::asset_version( $s );
 		( new HealthNotice( $s ) )->register();
 		( new EditorPanel() )->register();
 		( new Notices( $s ) )->register();
@@ -54,6 +58,10 @@ final class Plugin {
 			add_action(
 				'shutdown',
 				static function () use ( $s ) {
+					// During a flush storm (when the user asked for it) changes stay queued, as in "notify me".
+					if ( $s->settings->stormPause() && null !== $s->storm->tripped( time() ) ) {
+						return;
+					}
 					if ( $s->queue->count() > 0 ) {
 						$s->flusher->flush( 'auto' );
 					}
@@ -71,6 +79,18 @@ final class Plugin {
 			add_action( 'wp_initialize_site', array( self::class, 'new_site' ), 900 );
 			( new NetworkPage() )->register();
 		}
+	}
+
+	/** "Reload assets in browsers": a new version on the site's own CSS and JS addresses. */
+	private static function asset_version( Services $s ): void {
+		$version = $s->settings->assetVersion();
+		if ( $version <= 0 ) {
+			return;
+		}
+		$host    = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		$rewrite = static fn( $src ) => is_string( $src ) ? Core\AssetVersion::rewrite( $src, $version, $host ) : $src;
+		add_filter( 'style_loader_src', $rewrite, 99 );
+		add_filter( 'script_loader_src', $rewrite, 99 );
 	}
 
 	/** Remembers the address the site had when it was set up, so a cloned copy can be recognised later. */
@@ -115,6 +135,7 @@ final class Plugin {
 		update_option( 'purgekit_db_version', History\Repository::DB_VERSION, true );
 		if ( ! $s->secrets->has( 'WEBHOOK_KEY' ) ) {
 			$s->secrets->set( 'WEBHOOK_KEY', wp_generate_password( 40, false ) );
+			$s->store->set( 'webhook_key_at', time() );
 		}
 		$s->cron->sync();
 	}

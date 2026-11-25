@@ -227,4 +227,29 @@ final class CloudflareLayerTest extends TestCase {
 		$this->assertSame( 'GET', $this->http->requests[0]['method'] );
 		$this->assertStringEndsWith( '/settings/automatic_platform_optimization', $this->http->requests[0]['url'] );
 	}
+
+	public function test_cloudflare_purges_by_tag_after_the_urls_when_cache_tags_are_on(): void {
+		$l   = $this->layer();
+		$run = ( new \PurgeKit\Core\Executor( new \PurgeKit\Layers\Registry( array( $l ) ), new \PurgeKit\Tests\Fakes\FakeClock() ) )->run( new \PurgeKit\Core\PurgePlan( false, array( 'https://a.test/p/' ), array( 'p-1', 'home' ) ) );
+		$this->assertSame( \PurgeKit\Core\Run::OK, $run->status );
+		$this->assertCount( 2, $this->http->requests );
+		$this->assertSame( '{"files":["https:\/\/a.test\/p\/"]}', $this->http->requests[0]['args']['body'] );
+		$this->assertSame( '{"tags":["p-1","home"]}', $this->http->requests[1]['args']['body'] );
+	}
+
+	public function test_tag_purges_go_in_batches_of_100(): void {
+		$l = $this->layer();
+		$l->purgeTags( array_map( static fn( $i ) => "p-$i", range( 1, 230 ) ) );
+		$this->assertCount( 3, $this->http->requests );
+	}
+
+	public function test_token_info_reads_status_and_expiry_and_gives_null_when_unreadable(): void {
+		$l = $this->layer();
+		$this->http->queue( new HttpResponse( 200, '{"success":true,"result":{"status":"active","expires_on":"2030-01-01T00:00:00Z"}}' ) );
+		$this->assertSame( array( 'status' => 'active', 'expires_on' => '2030-01-01T00:00:00Z' ), $l->tokenInfo() );
+		$this->assertSame( 'Bearer SECRET_TOKEN', $this->http->requests[0]['args']['headers']['Authorization'] );
+		$this->http->queue( new HttpResponse( 401, '{"success":false}' ) );
+		$this->assertNull( $l->tokenInfo() );
+		$this->assertNull( $this->layer( false )->tokenInfo() );
+	}
 }

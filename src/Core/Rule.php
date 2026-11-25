@@ -10,6 +10,14 @@ final class Rule {
 
 	public const ACTIONS = array( self::DEFAULT, self::ALL, self::HOME, self::SKIP );
 
+	/** When a rule's job runs: always, or only when an earlier job of the same flush had a failing layer. */
+	public const ALWAYS     = 'always';
+	public const ON_FAILURE = 'on_failure';
+	public const WHEN       = array( self::ALWAYS, self::ON_FAILURE );
+
+	/** Longest wait a rule can ask for, in seconds. */
+	public const MAX_DELAY = 3600;
+
 	/** Change types a rule can listen for, with a label for the UI. */
 	public const TRIGGERS = array(
 		'post'                      => 'A post or page is published, updated or unpublished',
@@ -41,7 +49,9 @@ final class Rule {
 		public array $on,
 		public array $post_types,
 		public string $action,
-		public array $layers
+		public array $layers,
+		public int $delay = 0,
+		public string $when = self::ALWAYS
 	) {}
 
 	public function matches( Change $change ): bool {
@@ -67,6 +77,8 @@ final class Rule {
 			'post_types' => $this->post_types,
 			'action'     => $this->action,
 			'layers'     => $this->layers,
+			'delay'      => $this->delay,
+			'when'       => $this->when,
 		);
 	}
 }

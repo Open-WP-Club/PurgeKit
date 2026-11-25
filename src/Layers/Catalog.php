@@ -350,6 +350,41 @@ final class Catalog {
 					\autoptimizeCache::clearall();
 				}
 			),
+			// Perfmatters documents both calls: https://perfmatters.io/docs/remove-unused-css/ and https://perfmatters.io/docs/minify-css-wordpress/
+			// The class names are held in variables so a missing plugin is a plain "not detected", not a fatal error.
+			$layer(
+				'perfmatters',
+				'Perfmatters (used CSS and minified CSS)',
+				static fn() => class_exists( 'Perfmatters\\CSS' ) || class_exists( 'Perfmatters\\Minify' ),
+				static function () {
+					$css      = 'Perfmatters\\CSS';
+					$minify   = 'Perfmatters\\Minify';
+					$cleared  = false;
+					if ( class_exists( $css ) && method_exists( $css, 'clear_used_css' ) ) {
+						$css::clear_used_css();
+						$cleared = true;
+					}
+					if ( class_exists( $minify ) && method_exists( $minify, 'clear_minified' ) ) {
+						$minify::clear_minified( 'css' );
+						$cleared = true;
+					}
+					if ( ! $cleared ) {
+						throw new \RuntimeException( 'This Perfmatters version has neither CSS::clear_used_css() nor Minify::clear_minified().' );
+					}
+				}
+			),
+			// Oxygen: only the universal CSS cache. The function is known from a third-party snippet written for Oxygen 3.9 and 4.0;
+			// Oxygen's own documentation only describes the "Regenerate CSS Cache" button. Per-post CSS is not touched.
+			$layer(
+				'oxygen-universal-css',
+				'Oxygen universal CSS',
+				static fn() => function_exists( 'oxygen_vsb_cache_universal_css' ),
+				static function () {
+					if ( ! function_exists( 'oxygen_vsb_cache_universal_css' ) || ! oxygen_vsb_cache_universal_css() ) {
+						throw new \RuntimeException( 'Oxygen did not regenerate its universal CSS.' );
+					}
+				}
+			),
 		);
 	}
 }

@@ -14,6 +14,9 @@ final class Settings {
 		'warm_enabled',
 		'warm_sitemap_limit',
 		'verify_after_flush',
+		'storm_pause',
+		'cache_tags',
+		'soft_purge',
 		'allow_external',
 		'disabled_layers',
 		'exclude_paths',
@@ -104,6 +107,38 @@ final class Settings {
 		return (bool) $this->store->get( 'warm_enabled', true );
 	}
 
+	/** Stop automatic flushing while a flush storm lasts (the changes stay queued, as in "notify me"). */
+	public function stormPause(): bool {
+		return (bool) $this->store->get( 'storm_pause', false );
+	}
+
+	/** Send Surrogate-Key / Cache-Tag headers and purge by tag where a layer can. */
+	public function cacheTags(): bool {
+		return (bool) $this->store->get( 'cache_tags', false );
+	}
+
+	/** Mark content stale instead of deleting it where the CDN supports that. */
+	public function softPurge(): bool {
+		return (bool) $this->store->get( 'soft_purge', false );
+	}
+
+	/** The number added to the site's own CSS and JS addresses; 0 means nothing is added. Never exported. */
+	public function assetVersion(): int {
+		$v = $this->store->get( 'asset_version', 0 );
+		return is_numeric( $v ) ? max( 0, (int) $v ) : 0;
+	}
+
+	public function bumpAssetVersion( int $now ): int {
+		$next = max( $now, $this->assetVersion() + 1 );
+		$this->store->set( 'asset_version', $next );
+		return $next;
+	}
+
+	/** Has the first-run setup been completed or skipped? Per site; never exported. */
+	public function onboarded(): bool {
+		return (bool) $this->store->get( 'onboarded', false );
+	}
+
 	public function verifyAfterFlush(): bool {
 		return (bool) $this->store->get( 'verify_after_flush', false );
 	}
@@ -142,6 +177,10 @@ final class Settings {
 			'warm_enabled'           => $this->warmEnabled(),
 			'warm_sitemap_limit'     => $this->warmSitemapLimit(),
 			'verify_after_flush'     => $this->verifyAfterFlush(),
+			'storm_pause'            => $this->stormPause(),
+			'cache_tags'             => $this->cacheTags(),
+			'soft_purge'             => $this->softPurge(),
+			'onboarded'              => $this->onboarded(),
 			'allow_external'         => $this->allowExternal(),
 			'disabled_layers'        => $this->disabledLayers(),
 			'exclude_paths'          => implode( "\n", $this->excludePaths() ),
@@ -167,7 +206,7 @@ final class Settings {
 		if ( isset( $patch['schedule'] ) && in_array( $patch['schedule'], self::SCHEDULES, true ) ) {
 			$this->store->set( 'schedule', $patch['schedule'] );
 		}
-		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'verify_after_flush', 'allow_external' ) as $flag ) {
+		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'verify_after_flush', 'allow_external', 'storm_pause', 'cache_tags', 'soft_purge', 'onboarded' ) as $flag ) {
 			if ( isset( $patch[ $flag ] ) ) {
 				$this->store->set( $flag, (bool) $patch[ $flag ] );
 			}

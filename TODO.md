@@ -2,28 +2,17 @@
 
 Ideas for later, roughly by value for the effort. Nothing here is started.
 
-## Diagnostics
-
-- **Credentials health check.** A Health tab that checks the saved credentials (Cloudflare token scope, weak or never-rotated webhook key, unreachable Slack URL). Extends `LayerInterface::test()`.
-
 ## Purging
 
 - **Cloudflare APO switching.** The APO status is shown read-only. Turning it on or off needs the whole APO configuration, so it stays in the Cloudflare dashboard for now.
 - **More CDNs.** CloudFront (needs AWS SigV4 request signing), Akamai, Azure CDN, Google Cloud CDN. Needs real accounts to verify, so do these last.
-- **Cache-tag purging** (Fastly surrogate keys first): send `Cache-Tag` / `Surrogate-Key` headers and purge by tag instead of by URL. Cloudflare only supports tags on Enterprise, so it would fall back to URLs there.
-- **Soft purge for Fastly.** Mark content stale instead of deleting it, so a purge does not send a burst of requests to the origin. A header in `ProviderSpecs`.
-- **Asset version bump.** A button that changes the version query string of CSS and JS, to push browsers to reload them. Browser caches cannot be purged remotely, but this works around it.
-- **REST, feed and AMP URLs** added to the URLs of a changed post (`wp-json/wp/v2/...`, comment feed, `?amp`), for headless and mobile clients. All behind the existing `purgekit_post_urls` filter.
 - **More cache plugins and hosts.** Still open, and why: Hummingbird (the `wphb_clear_page_cache` action exists, but what it does without an argument was not read), Comet Cache (not looked at), GoDaddy (no public source for the purge code), Pagely, Pressable and WordPress VIP (Batcache and the VIP edge functions were not checked), Cloudways beyond Breeze. Added so far: Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, SpinupWP, Pantheon.
-- **Page builders still missing:** Bricks, Oxygen.
+- **Page builders still missing:** Bricks. It has no documented PHP call for clearing its CSS (only the `bricks/generate_css_file` action and `wp bricks regenerate_assets`). Oxygen is covered only for its universal CSS, with a function known from a third-party snippet (Oxygen 3.9 and 4.0); per-post CSS and Oxygen 6 are not verified.
+- **Cache tags beyond Fastly and Cloudflare.** Bunny and KeyCDN have no tag purge that was checked.
+- **Playwright end-to-end test and a working ESLint.** Both need a dependency change: `@playwright/test` is only a transitive dependency of `@wordpress/scripts` (not importable from the project), and `wp-scripts lint-js` fails because the installed TypeScript 7 does not work with `typescript-eslint` (`pnpm add -D typescript@5` should fix it). Not added on purpose: neither documents a function that clears its generated CSS, and deleting the files in `uploads/` by hand is not known to be safe (Elementor never recreates a deleted file). Read the plugin source for the function behind each "regenerate CSS" button first.
 
 ## Rules and history
 
-- **Rule chains.** Conditions such as "only if the other layer failed" and "wait N seconds before the CDN", for CDNs that sometimes refetch a stale copy from the origin right after a purge.
-- **Who or what triggered a flush.** Record the user, the request (webhook, WP-CLI, admin) and the matching rule with each history row.
-- **Flush storm detection.** Warn, and optionally fall back to notify mode, when many full flushes happen in a short time (a bad cron or a plugin flushing in a loop).
 
 ## Admin experience
-
-- **First-run setup.** A short first screen that explains the modes and shows what was detected.
 

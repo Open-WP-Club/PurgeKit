@@ -3,6 +3,7 @@ namespace PurgeKit;
 
 use PurgeKit\Alerts\Notifier;
 use PurgeKit\Core\EnvironmentGuard;
+use PurgeKit\Core\DeferredJobs;
 use PurgeKit\Core\Executor;
 use PurgeKit\Core\Health;
 use PurgeKit\Core\Flusher;
@@ -12,6 +13,7 @@ use PurgeKit\Core\Run;
 use PurgeKit\Core\Queue;
 use PurgeKit\Core\Store;
 use PurgeKit\Core\ScheduledPurges;
+use PurgeKit\Core\StormGuard;
 use PurgeKit\Core\RuleStore;
 use PurgeKit\Detect\FileScanner;
 use PurgeKit\Detect\PostUrlExpander;
@@ -42,6 +44,7 @@ use PurgeKit\Settings\SettingsPorter;
 use PurgeKit\Warm\SitemapReader;
 use PurgeKit\Warm\Warmer;
 use PurgeKit\Wp\Cron;
+use PurgeKit\Wp\DeferredRunner;
 use PurgeKit\Wp\WpClock;
 use PurgeKit\Wp\WpHttp;
 use PurgeKit\Wp\WpMailer;
@@ -74,6 +77,10 @@ final class Services {
 	public EnvironmentGuard $guard;
 	public ScheduledPurges $scheduled;
 	public ScheduledRunner $scheduler;
+	public StormGuard $storm;
+	public DeferredJobs $deferred;
+	public DeferredRunner $deferrer;
+	public PostUrlExpander $expander;
 
 	public static function build(): self {
 		$s = new self();
@@ -116,9 +123,12 @@ final class Services {
 		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );
 		$host        = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 		$s->guard    = new EnvironmentGuard( wp_get_environment_type(), $host, $s->settings->homeHost(), $s->settings->allowExternal() );
+		$s->storm    = new StormGuard( $s->store );
+		$s->deferred = new DeferredJobs( $s->store );
+		$s->expander = new PostUrlExpander();
 		$s->flusher  = new Flusher(
 			$s->queue,
-			new Planner( new PostUrlExpander(), home_url(), $s->settings->excludePaths() ),
+			new Planner( $s->expander, home_url(), $s->settings->excludePaths(), $s->settings->cacheTags() ? array( $s->expander, 'tags' ) : null ),
 			new Executor(
 				$s->registry,
 				new WpClock(),
@@ -140,10 +150,17 @@ final class Services {
 					$s->store->set( 'last_run', Health::summarise( $run, $source, time() ) );
 				}
 				$s->notifier->notify( $source, $run );
+				$now = time();
+				if ( $s->storm->record( $source, $run, $now ) ) {
+					$trip = $s->storm->tripped( $now );
+					$s->notifier->notifyStorm( (int) ( $trip['count'] ?? 0 ), (int) ( $trip['window'] ?? 600 ), $s->settings->stormPause() );
+				}
 			},
 			$s->rules,
-			static fn( Run $run ) => $s->settings->verifyAfterFlush() ? $s->verifier->verify( $run ) : null
+			static fn( Run $run ) => $s->settings->verifyAfterFlush() ? $s->verifier->verify( $run ) : null,
+			static fn( PurgePlan $plan, ?array $layers, array $rules, int $delay ) => $s->deferrer->defer( $plan, $layers, $rules, $delay )
 		);
+		$s->deferrer = new DeferredRunner( $s->deferred, $s->flusher );
 
 		$s->scheduled = new ScheduledPurges( $s->store, home_url() );
 		$s->scheduler = new ScheduledRunner( $s->scheduled, $s->flusher );

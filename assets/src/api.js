@@ -46,3 +46,11 @@ export const cloudflarePurge = ( prefixes, tags ) =>
 	apiFetch( { path: `${ NS }/cloudflare/purge`, method: 'POST', data: { prefixes, tags } } );
 export const checkCacheability = ( url ) =>
 	apiFetch( { path: `${ NS }/inspect/cacheability`, method: 'POST', data: { url } } );
+export const retryFlush = ( layers, urls ) =>
+	apiFetch( { path: `${ NS }/flush/retry`, method: 'POST', data: { layers, urls: urls || [] } } );
+export const resetStorm = () => apiFetch( { path: `${ NS }/storm/reset`, method: 'POST' } );
+export const getHealth = () => apiFetch( { path: `${ NS }/health` } );
+export const runHealth = () => apiFetch( { path: `${ NS }/health`, method: 'POST' } );
+export const getImpact = ( days = 30 ) => apiFetch( { path: `${ NS }/impact?days=${ days }` } );
+export const replayFlush = ( id ) => apiFetch( { path: `${ NS }/history/${ id }/replay`, method: 'POST' } );
+export const bumpAssets = () => apiFetch( { path: `${ NS }/assets/bump`, method: 'POST' } );

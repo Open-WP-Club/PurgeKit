@@ -7,7 +7,7 @@ use PurgeKit\Core\LayerResult;
 use PurgeKit\Core\Store;
 use PurgeKit\Secrets\Secrets;
 
-final class CloudflareLayer extends AbstractLayer implements ServesFromCache {
+final class CloudflareLayer extends AbstractLayer implements ServesFromCache, TagPurger {
 	private const BATCH           = 30;
 	private const MAX_PER_REQUEST = 100;
 
@@ -34,6 +34,11 @@ final class CloudflareLayer extends AbstractLayer implements ServesFromCache {
 		return $this->send( array( 'purge_everything' => true ) );
 	}
 
+	/** Purge by cache tag (the Cache-Tag header PurgeKit adds when "Cache tags" is on). */
+	public function purgeTags( array $tags ): LayerResult {
+		return $this->purgeBy( 'tags', $tags );
+	}
+
 	public function purgeUrls( array $urls ): LayerResult {
 		foreach ( array_chunk( array_values( $urls ), self::BATCH ) as $chunk ) {
 			$result = $this->send( array( 'files' => $chunk ) );
@@ -50,6 +55,33 @@ final class CloudflareLayer extends AbstractLayer implements ServesFromCache {
 			return new LayerResult( $this->id(), LayerResult::SKIPPED, 'Not detected' );
 		}
 		return $this->call( 'GET', '' );
+	}
+
+	/**
+	 * What Cloudflare says about the saved token: its status and when it expires. Only user tokens can be
+	 * checked this way, so a null answer means "could not tell", not "bad".
+	 *
+	 * @return array{status:string,expires_on:?string}|null
+	 */
+	public function tokenInfo(): ?array {
+		$token = (string) $this->secrets->get( 'CLOUDFLARE_TOKEN' );
+		if ( '' === $token ) {
+			return null;
+		}
+		try {
+			$response = $this->http->request( 'GET', 'https://api.cloudflare.com/client/v4/user/tokens/verify', array( 'headers' => array( 'Authorization' => 'Bearer ' . $token ) ) );
+		} catch ( HttpException $e ) {
+			unset( $e );
+			return null;
+		}
+		$data = json_decode( $response->body, true );
+		if ( $response->status < 200 || $response->status >= 300 || ! is_array( $data ) || empty( $data['success'] ) ) {
+			return null;
+		}
+		return array(
+			'status'     => (string) ( $data['result']['status'] ?? '' ),
+			'expires_on' => isset( $data['result']['expires_on'] ) ? (string) $data['result']['expires_on'] : null,
+		);
 	}
 
 	/**

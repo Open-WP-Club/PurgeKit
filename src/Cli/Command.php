@@ -25,10 +25,16 @@ final class Command {
 	 * [--network]
 	 * : On multisite, purge every site (ignores <url> and --post).
 	 *
+	 * [--dry-run]
+	 * : Show what would be purged, and on which layers, without purging anything.
+	 *
 	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Flags.
 	 */
 	public function flush( array $args, array $assoc_args ): void {
+		if ( isset( $assoc_args['dry-run'] ) && isset( $assoc_args['network'] ) ) {
+			\WP_CLI::error( '--dry-run cannot be combined with --network.' );
+		}
 		if ( isset( $assoc_args['network'] ) ) {
 			if ( ! is_multisite() ) {
 				\WP_CLI::error( 'This is not a multisite installation.' );
@@ -52,6 +58,10 @@ final class Command {
 				\WP_CLI::error( 'Post not found.' );
 			}
 		}
+		if ( isset( $assoc_args['dry-run'] ) ) {
+			$this->dry_run( $this->services->flusher->previewTarget( $url ? array( (string) $url ) : null ) );
+			return;
+		}
 		$run = $url ? $this->services->flusher->flushUrls( 'cli', array( (string) $url ) ) : $this->services->flusher->flushAll( 'cli' );
 
 		if ( Run::LOCKED === $run->status ) {
@@ -66,6 +76,27 @@ final class Command {
 		}
 		\WP_CLI::warning( 'Flush ' . $run->status . '.' );
 		\WP_CLI::halt( 1 );
+	}
+
+	/** @param array<string,mixed> $preview */
+	private function dry_run( array $preview ): void {
+		if ( $preview['empty'] ) {
+			\WP_CLI::success( 'Dry run: nothing would be purged.' );
+			return;
+		}
+		foreach ( $preview['jobs'] as $job ) {
+			\WP_CLI::line( $job['all'] ? 'Would purge everything on:' : sprintf( 'Would purge %d URL(s) on:', $job['urls_total'] ) );
+			foreach ( $job['layers'] as $layer ) {
+				\WP_CLI::line( sprintf( '  %-24s %s', $layer['id'], $layer['skipped'] ? '(skipped: ' . $layer['skipped'] . ')' : 'will be purged' ) );
+			}
+			foreach ( $job['urls'] as $url ) {
+				\WP_CLI::line( '  ' . $url );
+			}
+			if ( $job['urls_total'] > count( $job['urls'] ) ) {
+				\WP_CLI::line( sprintf( '  ... and %d more', $job['urls_total'] - count( $job['urls'] ) ) );
+			}
+		}
+		\WP_CLI::success( 'Dry run: nothing was purged.' );
 	}
 
 	/** Show pending changes, mode and the last run. */

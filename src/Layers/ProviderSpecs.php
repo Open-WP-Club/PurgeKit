@@ -37,9 +37,21 @@ final class ProviderSpecs {
 					'headers' => array( 'Fastly-Key' => '{FASTLY_TOKEN}' ),
 				),
 				'url'         => array(
-					'method'  => 'POST',
-					'url'     => 'https://api.fastly.com/purge/{url_noscheme}',
-					'headers' => array( 'Fastly-Key' => '{FASTLY_TOKEN}' ),
+					'method'       => 'POST',
+					'url'          => 'https://api.fastly.com/purge/{url_noscheme}',
+					'headers'      => array( 'Fastly-Key' => '{FASTLY_TOKEN}' ),
+					'soft_headers' => array( 'Fastly-Soft-Purge' => '1' ),
+				),
+				// Purge by surrogate key, many keys per request (the key list is space separated, at most 256).
+				'tags'        => array(
+					'method'       => 'POST',
+					'url'          => 'https://api.fastly.com/service/{fastly_service_id}/purge',
+					'headers'      => array(
+						'Fastly-Key'    => '{FASTLY_TOKEN}',
+						'Surrogate-Key' => '{tags}',
+					),
+					'soft_headers' => array( 'Fastly-Soft-Purge' => '1' ),
+					'batch'        => 256,
 				),
 				'test'        => array(
 					'method'  => 'GET',

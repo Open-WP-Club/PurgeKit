@@ -51,7 +51,7 @@ final class Executor {
 			}
 			$start = $this->clock->now();
 			try {
-				$result = $plan->all ? $layer->purgeAll() : $layer->purgeUrls( $plan->urls );
+				$result = $this->purge( $layer, $plan );
 			} catch ( \Throwable $e ) {
 				$result = new LayerResult( $layer->id(), LayerResult::FAILED, $e->getMessage() );
 			}
@@ -62,6 +62,23 @@ final class Executor {
 			return new Run( Run::SKIPPED, $results, $plan ); // Every layer was switched off or paused: nothing was purged.
 		}
 		return Run::fromResults( $results, $plan );
+	}
+
+	/** Everything, or the URLs, plus the cache tags on a layer that understands them. */
+	private function purge( \PurgeKit\Layers\LayerInterface $layer, PurgePlan $plan ): LayerResult {
+		if ( $plan->all ) {
+			return $layer->purgeAll();
+		}
+		$tagged = array() !== $plan->tags && $layer instanceof \PurgeKit\Layers\TagPurger;
+		if ( array() === $plan->urls && ! $tagged ) {
+			return new LayerResult( $layer->id(), LayerResult::OK, 'Nothing to purge on this layer.' );
+		}
+		$result = array() === $plan->urls ? new LayerResult( $layer->id(), LayerResult::OK ) : $layer->purgeUrls( $plan->urls );
+		if ( $tagged && LayerResult::OK === $result->status ) {
+			$tags = $layer->purgeTags( $plan->tags );
+			return LayerResult::OK === $tags->status ? new LayerResult( $layer->id(), LayerResult::OK, trim( $result->message . ' ' . $tags->message ) ) : $tags;
+		}
+		return $result;
 	}
 
 	/**

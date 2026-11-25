@@ -18,13 +18,18 @@ Free and open source (GPL-2.0-or-later). No paid tier, no telemetry.
 - **Smart purging**: a changed post purges that post, the home page, its terms, author and date archives and the feed. Site-wide changes purge everything.
 - **Ordered purging**: object cache, then cache plugin, then host, then Varnish, then CDN. A failing layer is recorded and the run is marked `partial`; it never fails silently.
 - **Cache warming** in the background after a purge.
-- **History** of every flush with the result of each layer.
+- **History** of every flush with the result of each layer, and who or what started it (user, request, rules, kind of change).
+- **First-run setup** and a **Health** tab that checks the saved credentials (Cloudflare token, webhook key, Slack) and the setup.
+- **Flush storm detection**: warns, and can pause automatic flushing, when many full flushes happen in a short time.
+- **Rule chains**: a rule can wait before it runs (for a CDN that refetches a stale copy right after a purge) or run only when an earlier step failed.
+- **Cache tags and soft purge**: pages carry `Surrogate-Key` / `Cache-Tag` headers, a changed post is purged by tag on Fastly and Cloudflare, and Fastly can mark content stale instead of deleting it.
+- **Impact** tab, **Run again** / **Retry failed layers** from History, alerts to **Slack, Discord, Teams, email and a JSON webhook**, and **Reload CSS and JavaScript in browsers**.
 - **REST API**, **WP-CLI**, a **deploy webhook** and a small **React dashboard** (Settings → PurgeKit).
 - **Admin bar** "Purge this page" and a "Purge cache" row action in post lists.
 
 ### Supported layers
 
-Object cache, PHP OPcache and APCu (opt-in), database transients (opt-in), WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, Nginx Helper, Nginx FastCGI cache, Varnish, SiteGround, WP Engine, Kinsta, SpinupWP, Pantheon, Cloudflare, Fastly, Bunny CDN, KeyCDN, Sucuri and a custom webhook. Elementor, Divi, Beaver Builder and Autoptimize files can be cleared too (opt-in).
+Object cache, PHP OPcache and APCu (opt-in), database transients (opt-in), WP Rocket, LiteSpeed Cache, W3 Total Cache, WP Super Cache, WP Fastest Cache, Cache Enabler, WP-Optimize, FlyingPress, Swift Performance, Breeze, Nginx Helper, Nginx FastCGI cache, Varnish, SiteGround, WP Engine, Kinsta, SpinupWP, Pantheon, Cloudflare, Fastly, Bunny CDN, KeyCDN, Sucuri and a custom webhook. Elementor, Divi, Beaver Builder, Autoptimize, Perfmatters and Oxygen (universal CSS) files can be cleared too (opt-in).
 
 ## Install
 
@@ -73,6 +78,7 @@ The block editor's document sidebar has a **PurgeKit cache** panel. Press *Check
 wp purgekit flush                 # everything
 wp purgekit flush https://example.com/page/
 wp purgekit flush --post=123
+wp purgekit flush --dry-run       # show what would be purged, purge nothing
 wp purgekit status
 wp purgekit layers
 wp purgekit scan                  # look for file changes made outside WordPress

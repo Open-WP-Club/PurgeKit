@@ -14,10 +14,10 @@ use PurgeKit\Secrets\Secrets;
  *
  * Placeholders in url, headers and body: `{NAME}` is a secret (UPPER_CASE) or a setting (lower_case),
  * `{basic:NAME}` is base64("secret:") for HTTP Basic auth, `{url}`, `{url_noscheme}` and `{url_encoded}`
- * are the page being purged. A body element that is exactly `{urls_noscheme}` or `{urls}` expands to the batch's URL list
+ * are the page being purged, `{tags}` is the space separated list of cache tags of a tag purge. A body element that is exactly `{urls_noscheme}` or `{urls}` expands to the batch's URL list
  * (without or with the scheme).
  */
-final class ApiLayer extends AbstractLayer implements ServesFromCache {
+final class ApiLayer extends AbstractLayer implements ServesFromCache, TagPurger {
 	/** @param array<string, mixed> $spec */
 	public function __construct( private array $spec, private Http $http, private Secrets $secrets, private Store $settings ) {}
 
@@ -76,6 +76,22 @@ final class ApiLayer extends AbstractLayer implements ServesFromCache {
 		return $final;
 	}
 
+	/** Only providers whose spec has a `tags` request purge by tag; for the others the URLs already did the work. */
+	public function purgeTags( array $tags ): LayerResult {
+		if ( empty( $this->spec['tags'] ) ) {
+			return $this->ok();
+		}
+		$req  = (array) $this->spec['tags'];
+		$size = max( 1, (int) ( $req['batch'] ?? 100 ) );
+		foreach ( array_chunk( array_values( array_map( 'strval', $tags ) ), $size ) as $chunk ) {
+			$result = $this->call( $req, array(), $chunk );
+			if ( LayerResult::OK !== $result->status ) {
+				return $result;
+			}
+		}
+		return $this->ok( sprintf( '%d cache tags purged.', count( $tags ) ) );
+	}
+
 	public function servedFrom( array $headers, string $body = '' ): ?string {
 		$fp = $this->spec['fingerprint'] ?? null;
 		if ( ! is_array( $fp ) ) {
@@ -91,11 +107,17 @@ final class ApiLayer extends AbstractLayer implements ServesFromCache {
 	}
 
 	/** One request per URL in a batch is not needed here: `{url*}` placeholders use the first, `{urls_noscheme}` uses all. */
-	private function call( array $req, array $urls ): LayerResult {
-		$first   = $urls[0] ?? '';
-		$context = $this->context( $first );
+	private function call( array $req, array $urls, array $tags = array() ): LayerResult {
+		$first             = $urls[0] ?? '';
+		$context           = $this->context( $first );
+		$context['{tags}'] = implode( ' ', $tags );
 		try {
-			$args = array( 'headers' => $this->fill( (array) ( $req['headers'] ?? array() ), $context, $urls ) );
+			$headers = (array) ( $req['headers'] ?? array() );
+			// Soft purge marks the copy stale instead of deleting it, so a purge does not send a burst of requests to the origin.
+			if ( ! empty( $req['soft_headers'] ) && (bool) $this->settings->get( 'soft_purge', false ) ) {
+				$headers = array_merge( $headers, (array) $req['soft_headers'] );
+			}
+			$args = array( 'headers' => $this->fill( $headers, $context, $urls ) );
 			if ( isset( $req['body'] ) ) {
 				$body = $this->fill( (array) $req['body'], $context, $urls );
 				if ( 'form' === ( $req['body_type'] ?? 'json' ) ) {

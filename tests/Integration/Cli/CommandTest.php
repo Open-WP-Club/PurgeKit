@@ -33,6 +33,26 @@ final class CommandTest extends \WP_UnitTestCase {
 		$this->assertStringContainsString( 'Success', $this->out() );
 	}
 
+	public function test_dry_run_lists_layers_and_urls_and_purges_nothing(): void {
+		$GLOBALS['wpdb']->query( 'DELETE FROM ' . $this->svc->history->table() );
+		$this->cmd->flush( array(), array( 'dry-run' => true ) );
+		$this->assertStringContainsString( 'Would purge everything on:', $this->out() );
+		$this->assertStringContainsString( 'object-cache', $this->out() );
+		$this->assertStringContainsString( 'Dry run: nothing was purged.', $this->out() );
+		$this->assertSame( 0, $this->svc->history->count() );
+
+		\WP_CLI::reset();
+		$this->cmd->flush( array( home_url( '/x/' ) ), array( 'dry-run' => true ) );
+		$this->assertStringContainsString( 'Would purge 1 URL(s) on:', $this->out() );
+		$this->assertStringContainsString( home_url( '/x/' ), $this->out() );
+		$this->assertSame( 0, $this->svc->history->count() );
+	}
+
+	public function test_dry_run_cannot_be_combined_with_network(): void {
+		$this->expectException( \RuntimeException::class );
+		$this->cmd->flush( array(), array( 'dry-run' => true, 'network' => true ) );
+	}
+
 	public function test_flush_url_flushes_only_that_url(): void {
 		$this->cmd->flush( array( home_url( '/x/' ) ), array() );
 		$this->assertSame( 'cli', $this->svc->history->recent( 1, 0 )[0]['source'] );

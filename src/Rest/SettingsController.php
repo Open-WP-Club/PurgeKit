@@ -74,7 +74,11 @@ final class SettingsController extends AbstractController {
 		return $this->services->settings->all() + array(
 			'cloudflare_token_set' => $this->services->secrets->has( 'CLOUDFLARE_TOKEN' ),
 			'webhook_key_set'      => $this->services->secrets->has( 'WEBHOOK_KEY' ),
-			'slack_webhook_set'    => $this->services->secrets->has( \PurgeKit\Alerts\Notifier::SLACK_SECRET ),
+			'slack_webhook_set'    => $this->services->secrets->has( Notifier::CHANNELS['slack']['secret'] ),
+			'discord_webhook_set'  => $this->services->secrets->has( Notifier::CHANNELS['discord']['secret'] ),
+			'teams_webhook_set'    => $this->services->secrets->has( Notifier::CHANNELS['teams']['secret'] ),
+			'alert_webhook_set'    => $this->services->secrets->has( Notifier::CHANNELS['webhook']['secret'] ),
+			'asset_version'        => $this->services->settings->assetVersion(),
 			'providers'            => $this->providers(),
 			'webhook_url'          => rest_url( self::NS . '/webhook/flush' ),
 			'multisite'            => is_multisite(),
@@ -102,12 +106,18 @@ final class SettingsController extends AbstractController {
 			$this->services->secrets->set( 'CLOUDFLARE_TOKEN', $body['cloudflare_token'] );
 		}
 		$this->save_providers( (array) ( $body['providers'] ?? array() ), (array) ( $body['clear_provider_fields'] ?? array() ) );
-		$slack = $body['slack_webhook_url'] ?? null;
-		if ( is_string( $slack ) && '' !== trim( $slack ) && Notifier::isSlackUrl( trim( $slack ) ) ) {
-			$this->services->secrets->set( Notifier::SLACK_SECRET, trim( $slack ) );
+		foreach ( Notifier::CHANNELS as $id => $channel ) {
+			$url = $body[ $channel['field'] ] ?? null;
+			if ( is_string( $url ) && '' !== trim( $url ) && Notifier::isUrl( $id, trim( $url ) ) ) {
+				$this->services->secrets->set( $channel['secret'], trim( $url ) );
+			}
 		}
 		if ( ! empty( $body['clear_slack_webhook'] ) ) {
-			$this->services->secrets->delete( Notifier::SLACK_SECRET );
+			$this->services->secrets->delete( Notifier::CHANNELS['slack']['secret'] );
+		}
+		$clear = $body['clear_alert_channel'] ?? null;
+		if ( is_string( $clear ) && isset( Notifier::CHANNELS[ $clear ] ) ) {
+			$this->services->secrets->delete( Notifier::CHANNELS[ $clear ]['secret'] );
 		}
 		$this->services->cron->sync();
 		return $this->get();
@@ -202,6 +212,7 @@ final class SettingsController extends AbstractController {
 	public function rotate(): array {
 		$key = wp_generate_password( 40, false );
 		$this->services->secrets->set( 'WEBHOOK_KEY', $key );
+		$this->services->store->set( 'webhook_key_at', time() );
 		return array(
 			'key' => $key,
 			'url' => rest_url( self::NS . '/webhook/flush' ),

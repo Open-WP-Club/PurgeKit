@@ -16,7 +16,7 @@ final class SettingsPorter {
 	public const FORMAT = 1;
 
 	/** Left out of exports and ignored on import. */
-	private const NEVER = array( 'allow_external' );
+	private const NEVER = array( 'allow_external', 'onboarded' );
 
 	public function __construct( private Settings $settings, private Store $store, private RuleStore $rules ) {}
 

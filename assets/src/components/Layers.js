@@ -2,36 +2,7 @@ import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { getLayers, purgeLayer, setLayerEnabled, testLayer } from '../api';
-
-const STATUS_LABEL = {
-	ok: __( 'OK', 'purgekit' ),
-	failed: __( 'Failed', 'purgekit' ),
-	partial: __( 'Partial', 'purgekit' ),
-	skipped: __( 'Skipped', 'purgekit' ),
-};
-const TONE = { ok: 'ok', failed: 'bad', partial: 'warn', skipped: 'muted' };
-
-/** History stores a GMT string, connection checks a unix time. */
-const toDate = ( at ) => ( typeof at === 'number' ? new Date( at * 1000 ) : new Date( String( at ).replace( ' ', 'T' ) + 'Z' ) );
-
-const ago = ( at ) => {
-	const d = toDate( at );
-	if ( Number.isNaN( d.getTime() ) ) {
-		return '';
-	}
-	const seconds = Math.round( ( d.getTime() - Date.now() ) / 1000 );
-	const rtf = new Intl.RelativeTimeFormat( undefined, { numeric: 'auto' } );
-	for ( const [ unit, size ] of [ [ 'day', 86400 ], [ 'hour', 3600 ], [ 'minute', 60 ] ] ) {
-		if ( Math.abs( seconds ) >= size ) {
-			return rtf.format( Math.round( seconds / size ), unit );
-		}
-	}
-	return rtf.format( 0, 'second' );
-};
-
-function Badge( { tone, children } ) {
-	return <span className={ `purgekit-badge is-${ tone }` }>{ children }</span>;
-}
+import { ago, Badge, STATUS_LABEL, TONE } from '../ui';
 
 /** One line such as "Last purge: OK · 2 hours ago · message". */
 function Outcome( { label, result, empty } ) {

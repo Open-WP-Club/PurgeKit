@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.1.5
+Stable tag: 0.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,25 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.2.0 =
+* New: Impact tab: how many flushes only touched some pages, how many pages were purged, flushes per day, what started them and what changed.
+* New: "Run again" for any flush in History, and "Retry failed layers" for a flush that only partly worked.
+* New: alerts to Discord, Microsoft Teams and a JSON webhook, next to Slack and email. The JSON webhook must be public https.
+* New: Cloudflare purges by cache tag, like Fastly, when "Cache tags" is on.
+* New: "Reload CSS and JavaScript in browsers": adds a new version to the site's own CSS and JS addresses and purges every layer.
+* New: Perfmatters (used CSS and minified CSS) and Oxygen (universal CSS) layers, opt-in with the page-builder switch.
+* New: `wp purgekit flush --dry-run` shows what would be purged and on which layers, without purging.
+* New: first-run setup that shows what was detected, recommends a mode and checks the connections.
+* New: Health tab: checks the Cloudflare token (status, expiry, zone access), the deploy webhook key (weak, never rotated, over a year old), the Slack webhook, alerts, WP-Cron and the last purge of every layer.
+* New: flush storm detection: a warning (and optionally a pause of automatic flushing) when many full flushes happen in a short time.
+* New: rules can wait before they run (up to an hour) and can be a fallback that runs only when an earlier step failed.
+* New: History shows who or what started each flush: the user, the kind of request, the rules and the kinds of change.
+* New: cache tags: Surrogate-Key and Cache-Tag headers on your pages, and purging a changed post by tag on Fastly. Soft purge for Fastly.
+* New: a changed post also purges its REST item and collection, its comment feed and its AMP version.
+* New: "Retry failed layers" after a partial flush, and the result of the check after a flush is shown right away.
+* Improved: the dashboard has tiles (last flush, layers, last 24 hours, waiting), recent flushes and a confirmation that lists the layers before purging everything.
+* Improved: settings are split into sections with the same rows as the layer map, and a save bar that shows unsaved changes.
 
 = 0.1.5 =
 * New: "Why isn't it cached?" in the Inspector: explains what stops a page from being cached (cookies set on an anonymous visit, Cache-Control, Vary, status codes, Cloudflare DYNAMIC or BYPASS) and whether a cache answered the second visit.

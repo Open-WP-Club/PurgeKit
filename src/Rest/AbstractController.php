@@ -17,10 +17,13 @@ abstract class AbstractController {
 
 	protected function run_response( Run $run ): \WP_REST_Response {
 		$data = array(
-			'status'  => $run->status,
-			'all'     => (bool) ( $run->plan && $run->plan->all ),
-			'urls'    => $run->plan ? $run->plan->urls : array(),
-			'results' => array_map(
+			'status'       => $run->status,
+			'all'          => (bool) ( $run->plan && $run->plan->all ),
+			'urls'         => $run->plan ? $run->plan->urls : array(),
+			'rules'        => $run->rules,
+			'deferred'     => $run->deferred,
+			'verification' => $run->verification,
+			'results'      => array_map(
 				static fn( $r ) => array(
 					'layer'   => $r->layer,
 					'status'  => $r->status,

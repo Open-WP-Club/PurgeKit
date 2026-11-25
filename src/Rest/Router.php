@@ -11,7 +11,7 @@ final class Router {
 	}
 
 	public function routes(): void {
-		foreach ( array( StatusController::class, FlushController::class, LayersController::class, HistoryController::class, InspectController::class, CloudflareController::class, RulesController::class, ScheduledController::class, SettingsController::class, WebhookController::class ) as $class ) {
+		foreach ( array( StatusController::class, FlushController::class, LayersController::class, HistoryController::class, InspectController::class, CloudflareController::class, RulesController::class, ScheduledController::class, AssetsController::class, HealthController::class, SettingsController::class, WebhookController::class ) as $class ) {
 			( new $class( $this->services ) )->register();
 		}
 	}

@@ -323,3 +323,628 @@
 .purgekit-finding:first-child {
 	border-top: 0;
 }
+
+/* ------------------------------------------------------------------ */
+/* Shared pieces. They follow the look of the layer map: thin rows,    */
+/* small badges, muted secondary text, actions on the right.           */
+/* ------------------------------------------------------------------ */
+
+.purgekit-group {
+	margin: 0 0 8px;
+}
+
+.purgekit-group__title {
+	margin: 22px 0 6px;
+	padding-top: 0;
+	border-top: 0;
+	color: #50575e;
+	font-size: 12px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.purgekit-group:first-child > .purgekit-group__title {
+	margin-top: 0;
+}
+
+.purgekit-badge.is-muted {
+	background: #f0f0f1;
+	color: #50575e;
+}
+
+.purgekit-note {
+	margin: 10px 0 0;
+	padding: 8px 12px;
+	border-left: 3px solid #dcdcde;
+	border-radius: 2px;
+	background: #f6f7f7;
+	overflow-wrap: anywhere;
+}
+
+.purgekit-note.is-ok {
+	border-color: #00a32a;
+	background: #edfaef;
+}
+
+.purgekit-note.is-bad {
+	border-color: #d63638;
+	background: #fcf0f1;
+}
+
+.purgekit-note.is-warn {
+	border-color: #dba617;
+	background: #fcf9e8;
+}
+
+.purgekit-live:empty {
+	display: none;
+}
+
+.purgekit-banner {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px 20px;
+	margin: 0 0 16px;
+	padding: 12px 16px;
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #72aee6;
+	border-radius: 4px;
+	background: #fff;
+}
+
+.purgekit-banner.is-warn {
+	border-left-color: #dba617;
+	background: #fcf9e8;
+}
+
+.purgekit-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.purgekit .purgekit-actions .components-button + .components-button {
+	margin-left: 0;
+}
+
+/* Stat tiles on the dashboard */
+.purgekit-tiles {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.purgekit-tile {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 16px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #fff;
+	box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.purgekit-tile__title {
+	color: #50575e;
+	font-size: 12px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.purgekit-tile__value {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.purgekit-tile__number {
+	font-size: 26px;
+	line-height: 1;
+}
+
+.purgekit-tile__hint {
+	color: #646970;
+	font-size: 12px;
+}
+
+.purgekit-bars {
+	display: inline-flex;
+	align-items: flex-end;
+	gap: 3px;
+	height: 28px;
+	margin-left: auto;
+}
+
+.purgekit-bars__bar {
+	display: block;
+	width: 7px;
+	border-radius: 1px;
+	background: #a7aaad;
+}
+
+.purgekit-bars__bar.has-problems {
+	background: #d63638;
+}
+
+/* Result of a flush */
+.purgekit-result {
+	margin-top: 16px;
+	padding-top: 14px;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-result__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 10px;
+}
+
+.purgekit-result__close {
+	margin-left: auto;
+}
+
+.purgekit-result__layers,
+.purgekit-recent,
+.purgekit-confirm__layers {
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-result__actions {
+	margin-top: 12px;
+}
+
+.purgekit-recent li,
+.purgekit-confirm__layers li {
+	padding: 8px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-recent li:first-child,
+.purgekit-confirm__layers li:first-child {
+	border-top: 0;
+}
+
+.purgekit-modal {
+	max-width: 520px;
+	width: 100%;
+}
+
+.purgekit-modal__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 20px;
+}
+
+/* Preview of the queue */
+.purgekit-preview ul {
+	margin: 8px 0 0 18px;
+	list-style: disc;
+}
+
+/* Settings: sub navigation, rows, save bar */
+.purgekit-settings {
+	display: grid;
+	grid-template-columns: 220px minmax(0, 1fr);
+	gap: 28px;
+}
+
+.purgekit-subnav {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	align-self: start;
+	position: sticky;
+	top: 48px;
+}
+
+.purgekit-subnav__item {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 9px 12px;
+	border: 0;
+	border-left: 3px solid transparent;
+	border-radius: 0 4px 4px 0;
+	background: none;
+	color: #1d2327;
+	text-align: left;
+	cursor: pointer;
+}
+
+.purgekit-subnav__item span {
+	color: #646970;
+	font-size: 12px;
+}
+
+.purgekit-subnav__item:hover {
+	background: #f6f7f7;
+}
+
+.purgekit-subnav__item.is-active {
+	border-left-color: #2271b1;
+	background: #f0f6fc;
+}
+
+.purgekit-subnav__item:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: -2px;
+}
+
+.purgekit-settings__body {
+	min-width: 0;
+	max-width: 720px;
+}
+
+.purgekit-setting {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 14px 28px;
+	padding: 14px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-group > .purgekit-setting:first-of-type,
+.purgekit-group__title + .purgekit-setting {
+	border-top: 0;
+}
+
+.purgekit-setting.is-stacked {
+	flex-direction: column;
+}
+
+.purgekit-setting.is-stacked .purgekit-setting__control {
+	width: 100%;
+}
+
+.purgekit-setting__text {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.purgekit-setting__name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.purgekit-setting__name label {
+	font-weight: 600;
+}
+
+.purgekit-setting__help {
+	margin: 4px 0 0;
+	color: #646970;
+}
+
+.purgekit-setting__control {
+	flex: 0 0 260px;
+	min-width: 0;
+}
+
+.purgekit-setting__control .components-base-control {
+	margin-bottom: 0;
+}
+
+.purgekit-setting:has(.components-form-toggle) .purgekit-setting__control {
+	flex: 0 0 auto;
+	padding-top: 2px;
+}
+
+.purgekit-setting__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+	padding: 10px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-provider {
+	padding: 10px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-provider > summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.purgekit-provider__fields {
+	margin-top: 6px;
+	padding-left: 12px;
+}
+
+.purgekit-savebar {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px 12px;
+	margin-top: 24px;
+	padding: 12px 0;
+	border-top: 1px solid #dcdcde;
+	background: #fff;
+}
+
+.purgekit-savebar__state {
+	margin-right: auto;
+	color: #646970;
+}
+
+.purgekit-savebar.is-dirty .purgekit-savebar__state {
+	color: #8a5a00;
+	font-weight: 600;
+}
+
+.purgekit-savebar .purgekit-live {
+	flex-basis: 100%;
+	order: 5;
+}
+
+/* Choice cards (mode) */
+.purgekit-choices {
+	margin: 0 0 8px;
+}
+
+.purgekit-choices legend {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+}
+
+.purgekit-choice {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	margin: 0 0 8px;
+	padding: 12px 14px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.purgekit-choice:hover {
+	background: #f6f7f7;
+}
+
+.purgekit-choice.is-selected {
+	border-color: #2271b1;
+	background: #f0f6fc;
+}
+
+.purgekit-choice input {
+	margin-top: 3px;
+}
+
+.purgekit-choice__body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.purgekit-choice__text {
+	color: #50575e;
+}
+
+/* First-run setup */
+.purgekit-wizard {
+	border-left: 4px solid #2271b1;
+}
+
+.purgekit-steps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 22px;
+	margin: 0 0 18px;
+	padding: 0;
+	list-style: none;
+	color: #646970;
+}
+
+.purgekit-steps li span {
+	display: inline-block;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: #f0f0f1;
+	color: #1d2327;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 22px;
+	text-align: center;
+}
+
+.purgekit-steps li.is-current {
+	color: #1d2327;
+	font-weight: 600;
+}
+
+.purgekit-steps li.is-current span {
+	background: #2271b1;
+	color: #fff;
+}
+
+.purgekit-steps li.is-done span {
+	background: #edfaef;
+	color: #00450c;
+}
+
+.purgekit-wizard__nav {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 20px;
+	padding-top: 14px;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-wizard__spacer {
+	flex: 1 1 auto;
+}
+
+@media (max-width: 960px) {
+	.purgekit-tiles {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.purgekit-settings {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.purgekit-subnav {
+		flex-direction: row;
+		flex-wrap: wrap;
+		position: static;
+	}
+
+	.purgekit-subnav__item {
+		border-left: 0;
+		border-bottom: 3px solid transparent;
+		border-radius: 4px 4px 0 0;
+	}
+
+	.purgekit-subnav__item.is-active {
+		border-bottom-color: #2271b1;
+	}
+
+	.purgekit-subnav__item span {
+		display: none;
+	}
+}
+
+@media (max-width: 600px) {
+	.purgekit-tiles {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.purgekit-setting {
+		flex-direction: column;
+	}
+
+	.purgekit-setting__control {
+		flex-basis: auto;
+		width: 100%;
+	}
+
+	.purgekit-banner {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.purgekit-choice,
+	.purgekit-subnav__item {
+		transition: background-color 0.12s ease, border-color 0.12s ease;
+	}
+}
+
+/* Impact */
+.purgekit-impact__chart {
+	display: flex;
+	align-items: flex-end;
+	gap: 3px;
+	height: 120px;
+	padding: 4px 0;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.purgekit-impact__day {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column-reverse;
+	justify-content: flex-start;
+	height: 100%;
+	min-width: 2px;
+	border-bottom: 3px solid transparent;
+}
+
+.purgekit-impact__day.has-problems {
+	border-bottom-color: #d63638;
+}
+
+.purgekit-impact__targeted {
+	display: block;
+	background: #2271b1;
+	min-height: 0;
+}
+
+.purgekit-impact__full {
+	display: block;
+	background: #a7aaad;
+	min-height: 0;
+}
+
+.purgekit-impact__key {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	margin: 0 2px 0 10px;
+	border-radius: 2px;
+	vertical-align: baseline;
+}
+
+.purgekit-impact__key.is-targeted {
+	background: #2271b1;
+	margin-left: 0;
+}
+
+.purgekit-impact__key.is-full {
+	background: #a7aaad;
+}
+
+.purgekit-impact__key.is-problem {
+	background: #d63638;
+}
+
+.purgekit-impact__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-impact__list li {
+	display: grid;
+	grid-template-columns: 180px minmax(0, 1fr) 40px;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 0;
+	border-top: 1px solid #f0f0f1;
+}
+
+.purgekit-impact__list li:first-child {
+	border-top: 0;
+}
+
+.purgekit-impact__bar {
+	display: block;
+	height: 8px;
+	border-radius: 2px;
+	background: #72aee6;
+}
+
+.purgekit-history__actions {
+	display: flex;
+	flex: 0 0 auto;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 4px;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button, CheckboxControl, Notice, SelectControl, TextControl } from '@wordpress/components';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { getLayers, getRules, saveRules } from '../api';
 import Scheduled from './Scheduled';
 import Preview from './Preview';
@@ -20,7 +20,14 @@ const blank = () => ( {
 	post_types: [],
 	action: 'default',
 	layers: [],
+	delay: 0,
+	when: 'always',
 } );
+
+const WHEN_OPTIONS = [
+	{ value: 'always', label: __( 'Always', 'purgekit' ) },
+	{ value: 'on_failure', label: __( 'Only if an earlier step of the same flush failed', 'purgekit' ) },
+];
 
 const toggle = ( list, value, on ) => ( on ? [ ...list, value ] : list.filter( ( v ) => v !== value ) );
 
@@ -42,7 +49,7 @@ export default function Rules() {
 	}, [] );
 
 	if ( rules === null ) {
-		return message ? <Notice status="error" isDismissible={ false }>{ message.text }</Notice> : <p>{ __( 'Loading…', 'purgekit' ) }</p>;
+		return message ? <Notice status="error" isDismissible={ false }>{ message.text }</Notice> : <p role="status">{ __( 'Loading…', 'purgekit' ) }</p>;
 	}
 
 	const change = ( i, patch ) => setRules( rules.map( ( r, n ) => ( n === i ? { ...r, ...patch } : r ) ) );
@@ -76,6 +83,8 @@ export default function Rules() {
 					<summary>
 						<strong>{ rule.name }</strong>
 						{ ! rule.enabled && ` (${ __( 'off', 'purgekit' ) })` } — { ACTION_LABELS[ rule.action ] }
+						{ rule.delay > 0 && ` — ${ sprintf( /* translators: %d: seconds */ __( 'after %d s', 'purgekit' ), rule.delay ) }` }
+						{ rule.when === 'on_failure' && ` — ${ __( 'fallback', 'purgekit' ) }` }
 					</summary>
 					<TextControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Name', 'purgekit' ) } value={ rule.name } onChange={ ( name ) => change( i, { name } ) } />
 					<CheckboxControl __nextHasNoMarginBottom label={ __( 'Enabled', 'purgekit' ) } checked={ rule.enabled } onChange={ ( enabled ) => change( i, { enabled } ) } />
@@ -106,6 +115,31 @@ export default function Rules() {
 							{ layers.map( ( l ) => (
 								<CheckboxControl key={ l.id } __nextHasNoMarginBottom label={ l.label } checked={ rule.layers.includes( l.id ) } onChange={ ( on ) => change( i, { layers: toggle( rule.layers, l.id, on ) } ) } />
 							) ) }
+						</fieldset>
+					) }
+					{ rule.action !== 'skip' && (
+						<fieldset>
+							<legend>{ __( 'Timing', 'purgekit' ) }</legend>
+							<TextControl
+								__nextHasNoMarginBottom
+								__next40pxDefaultSize
+								label={ __( 'Wait this many seconds before running (0 means right away, 3600 at most)', 'purgekit' ) }
+								type="number"
+								min={ 0 }
+								max={ 3600 }
+								value={ rule.delay ?? 0 }
+								onChange={ ( v ) => change( i, { delay: Math.max( 0, Math.min( 3600, parseInt( v, 10 ) || 0 ) ) } ) }
+								help={ __( 'For a CDN that sometimes fetches a stale copy from the origin right after a purge: purge the cache plugin now and the CDN a little later. Runs on WP-Cron.', 'purgekit' ) }
+							/>
+							<SelectControl
+								__nextHasNoMarginBottom
+								__next40pxDefaultSize
+								label={ __( 'Run', 'purgekit' ) }
+								value={ rule.when || 'always' }
+								options={ WHEN_OPTIONS }
+								onChange={ ( when ) => change( i, { when } ) }
+								help={ __( 'A fallback runs after the other rules of the flush, and only when one of their layers failed.', 'purgekit' ) }
+							/>
 						</fieldset>
 					) }
 					<Button variant="tertiary" disabled={ i === 0 } onClick={ () => move( i, -1 ) }>{ __( 'Move up', 'purgekit' ) }</Button>

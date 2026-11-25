@@ -4,7 +4,7 @@ import { __, sprintf } from '@wordpress/i18n';
 import { previewFlush } from '../api';
 
 /** Dry run: shows what the next queued flush would do. Nothing is purged and the queue is not touched. */
-export default function Preview() {
+export default function Preview( { extra = null } ) {
 	const [ data, setData ] = useState( null );
 	const [ error, setError ] = useState( null );
 	const [ busy, setBusy ] = useState( false );
@@ -23,9 +23,12 @@ export default function Preview() {
 
 	return (
 		<div className="purgekit-preview">
-			<Button variant="secondary" onClick={ run } isBusy={ busy } disabled={ busy }>
-				{ __( 'Preview', 'purgekit' ) }
-			</Button>
+			<div className="purgekit-actions">
+				<Button variant="secondary" onClick={ run } isBusy={ busy } disabled={ busy }>
+					{ __( 'Preview', 'purgekit' ) }
+				</Button>
+				{ extra }
+			</div>
 			{ error && (
 				<Notice status="error" isDismissible={ false }>
 					{ error }
@@ -67,6 +70,9 @@ function PreviewResult( { data } ) {
 								: __( 'by default (no rule)', 'purgekit' ) }
 							{ ' — ' }
 							{ job.layers.length > 0 ? job.layers.map( ( l ) => l.label ).join( ', ' ) : __( 'no active layer', 'purgekit' ) }
+							{ job.delay > 0 && ' — ' + sprintf( /* translators: %d: seconds */ __( 'after %d s', 'purgekit' ), job.delay ) }
+							{ job.when === 'on_failure' && ' — ' + __( 'only if an earlier step failed', 'purgekit' ) }
+							{ job.tags > 0 && ' — ' + sprintf( /* translators: %d: number of cache tags */ __( '%d cache tags', 'purgekit' ), job.tags ) }
 							{ ! job.all && job.urls.length > 0 && (
 								<ul>
 									{ job.urls.map( ( u ) => (

@@ -16,6 +16,42 @@ final class PostUrlExpander implements UrlExpander {
 		return array_values( array_unique( array_filter( $urls ) ) );
 	}
 
+	/**
+	 * Cache tags (surrogate keys) a change invalidates. TagHeaders puts the same names on the pages:
+	 * `p-ID` on every post a page shows, `t-ID` on term archives, `a-ID` on author archives,
+	 * `pt-TYPE` on post type archives and `home` on the front page and the main feed.
+	 *
+	 * @return string[]
+	 */
+	public function tags( Change $change ): array {
+		$tags = array();
+		if ( isset( $change->context['post_id'] ) ) {
+			$post = get_post( (int) $change->context['post_id'] );
+			if ( $post && 'product_variation' === $post->post_type && $post->post_parent > 0 ) {
+				$post = get_post( (int) $post->post_parent );
+			}
+			if ( $post ) {
+				array_push( $tags, 'p-' . $post->ID, 'home', 'a-' . (int) $post->post_author, 'pt-' . $post->post_type );
+				foreach ( get_object_taxonomies( $post->post_type, 'objects' ) as $tax ) {
+					if ( ! $tax->public ) {
+						continue;
+					}
+					foreach ( (array) get_the_terms( $post, $tax->name ) as $term ) {
+						if ( $term instanceof \WP_Term ) {
+							$tags[] = 't-' . $term->term_id;
+							foreach ( get_ancestors( $term->term_id, $tax->name, 'taxonomy' ) as $id ) {
+								$tags[] = 't-' . (int) $id;
+							}
+						}
+					}
+				}
+			}
+		} elseif ( isset( $change->context['term_id'] ) ) {
+			array_push( $tags, 't-' . (int) $change->context['term_id'], 'home' );
+		}
+		return array_values( array_unique( $tags ) );
+	}
+
 	private function post_urls( int $post_id ): array {
 		$post = get_post( $post_id );
 		// A variation has no page of its own; what changes is its product.
@@ -37,7 +73,7 @@ final class PostUrlExpander implements UrlExpander {
 				}
 			}
 		}
-		array_push( $urls, ...$this->shop( $post ) );
+		array_push( $urls, ...$this->shop( $post ), ...$this->machine_urls( $post ) );
 
 		$urls[] = get_author_posts_url( (int) $post->post_author );
 		array_push( $urls, ...$this->archives( $post ), ...$this->ancestors( $post ), ...$this->translations( $post ), ...$this->sitemaps() );
@@ -49,6 +85,30 @@ final class PostUrlExpander implements UrlExpander {
 
 		$filtered = apply_filters( 'purgekit_post_urls', $urls, $post_id );
 		return is_array( $filtered ) ? $filtered : $urls;
+	}
+
+	/**
+	 * What headless and mobile clients, feed readers and AMP pages fetch: the REST item and collection,
+	 * the post's comment feed and the AMP version of the page.
+	 */
+	private function machine_urls( \WP_Post $post ): array {
+		$urls = array();
+		$type = get_post_type_object( $post->post_type );
+		if ( $type && $type->show_in_rest ) {
+			$base   = is_string( $type->rest_base ) && '' !== $type->rest_base ? $type->rest_base : $type->name;
+			$prefix = rest_get_url_prefix();
+			$ns     = is_string( $type->rest_namespace ) && '' !== $type->rest_namespace ? $type->rest_namespace : 'wp/v2';
+			array_push( $urls, home_url( "/$prefix/$ns/$base/{$post->ID}" ), home_url( "/$prefix/$ns/$base" ) );
+		}
+		$comments = get_post_comments_feed_link( $post->ID );
+		if ( is_string( $comments ) && '' !== $comments ) {
+			$urls[] = $comments;
+		}
+		$link = get_permalink( $post );
+		if ( $link ) {
+			$urls[] = add_query_arg( 'amp', '1', $link );
+		}
+		return $urls;
 	}
 
 	/** The custom post type archive and the blog page, plus the first pages of every listing (a new post shifts them). */

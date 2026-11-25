@@ -12,6 +12,7 @@ use PurgeKit\Layers\TransientsLayer;
 use PurgeKit\Tests\Fakes\FakeStore;
 
 require_once __DIR__ . '/../../Fakes/AutoptimizeStub.php';
+require_once __DIR__ . '/../../Fakes/PerfmattersStub.php';
 
 final class CachesTest extends TestCase {
 	private function apcu( ?array $status, bool $clears = true ): Apcu {
@@ -131,7 +132,7 @@ final class CachesTest extends TestCase {
 	public function test_asset_layers_need_the_plugin_and_the_switch(): void {
 		$on  = $this->assets( true );
 		$off = $this->assets( false );
-		$this->assertSame( array( 'elementor-files', 'divi-static', 'beaver-builder-assets', 'autoptimize' ), array_keys( $on ) );
+		$this->assertSame( array( 'elementor-files', 'divi-static', 'beaver-builder-assets', 'autoptimize', 'perfmatters', 'oxygen-universal-css' ), array_keys( $on ) );
 		$this->assertTrue( $on['autoptimize']->detect(), 'The stand-in class is loaded.' );
 		$this->assertFalse( $on['elementor-files']->detect(), 'Elementor is not installed here.' );
 		$this->assertFalse( $off['autoptimize']->detect(), 'Switched off.' );
@@ -145,5 +146,35 @@ final class CachesTest extends TestCase {
 		$this->assertSame( LayerResult::OK, $layer->purgeAll()->status );
 		$this->assertSame( 1, \autoptimizeCache::$cleared );
 		$this->assertSame( Tier::PLUGIN, $layer->tier() );
+	}
+
+	public function test_perfmatters_clears_used_css_and_minified_css_on_a_full_purge_only(): void {
+		$layer = $this->assets( true )['perfmatters'];
+		\Perfmatters\CSS::$cleared    = 0;
+		\Perfmatters\Minify::$cleared = array();
+		$this->assertTrue( $layer->detect() );
+		$this->assertFalse( $this->assets( false )['perfmatters']->detect(), 'Switched off.' );
+		$this->assertSame( LayerResult::SKIPPED, $layer->purgeUrls( array( 'https://a.test/' ) )->status );
+		$this->assertSame( 0, \Perfmatters\CSS::$cleared );
+		$this->assertSame( LayerResult::OK, $layer->purgeAll()->status );
+		$this->assertSame( 1, \Perfmatters\CSS::$cleared );
+		$this->assertSame( array( 'css' ), \Perfmatters\Minify::$cleared );
+	}
+
+	public function test_oxygen_regenerates_its_universal_css_and_reports_a_refusal(): void {
+		$layer = $this->assets( true )['oxygen-universal-css'];
+		$GLOBALS['purgekit_oxygen_calls']  = 0;
+		$GLOBALS['purgekit_oxygen_result'] = true;
+		$this->assertTrue( $layer->detect() );
+		$this->assertSame( LayerResult::OK, $layer->purgeAll()->status );
+		$this->assertSame( 1, $GLOBALS['purgekit_oxygen_calls'] );
+		$GLOBALS['purgekit_oxygen_result'] = false;
+		$this->expectException( \RuntimeException::class ); // The Executor turns this into a failed result.
+		$this->expectExceptionMessage( 'did not regenerate' );
+		try {
+			$layer->purgeAll();
+		} finally {
+			unset( $GLOBALS['purgekit_oxygen_result'] );
+		}
 	}
 }
