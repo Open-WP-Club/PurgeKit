@@ -41,7 +41,12 @@ final class AuditTest extends TestCase {
 		$this->assertSame( Health::GOOD, Audit::alerts( array( 'email' ) )['status'] );
 		$this->assertNull( Audit::cron( true, false ) );
 		$this->assertNull( Audit::cron( false, true ) );
-		$this->assertNotNull( Audit::cron( true, true ) );
+		$this->assertSame( Health::RECOMMENDED, Audit::cron( true, true )['status'], 'Switched off and never seen running.' );
+		$now = 1_000_000;
+		$this->assertSame( Health::RECOMMENDED, Audit::cron( true, true, $now - 4 * 3600, $now )['status'], 'The hourly job has stopped.' );
+		$ok = Audit::cron( true, true, $now - 1800, $now );
+		$this->assertSame( Health::GOOD, $ok['status'], 'A server cron job runs it, so switching WP-Cron off is fine.' );
+		$this->assertStringContainsString( '30 minutes ago', $ok['description'] );
 		$this->assertNull( Audit::storm( null, false ) );
 		$this->assertStringContainsString( '5 full flushes in 10 minutes', Audit::storm( array( 'count' => 5, 'window' => 600 ), true )['description'] );
 		$rows = Audit::failingLayers( array( 'a' => array( 'status' => 'failed', 'message' => 'boom' ), 'b' => array( 'status' => 'ok', 'message' => '' ) ), array( 'a' => 'A', 'b' => 'B' ) );

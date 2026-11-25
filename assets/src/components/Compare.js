@@ -45,6 +45,31 @@ export const findGaps = ( rows ) => {
 	return gaps;
 };
 
+/** A layer is worth a row when it is running and has something to show: purges on record, or live figures. */
+export const inUse = ( r ) => r.state === 'active' && ( r.purges + r.failed > 0 || ( r.figures?.length ?? 0 ) > 0 );
+
+/** The numbers over all layers in use, for the tiles at the top. */
+export const totals = ( rows ) => {
+	const t = rows.reduce(
+		( a, r ) => ( { purges: a.purges + r.purges, failed: a.failed + r.failed, ms: a.ms + r.avg_ms * ( r.purges + r.failed ) } ),
+		{ purges: 0, failed: 0, ms: 0 }
+	);
+	const done = t.purges + t.failed;
+	return { ...t, avg_ms: done ? Math.round( t.ms / done ) : 0, success: done ? Math.round( ( 100 * t.purges ) / done ) : null };
+};
+
+function Stat( { title, value, hint, tone } ) {
+	return (
+		<div className="purgekit-tile">
+			<span className="purgekit-tile__title">{ title }</span>
+			<div className="purgekit-tile__value">
+				<strong className={ `purgekit-tile__number${ tone === 'bad' ? ' purgekit-bad' : '' }` }>{ value }</strong>
+			</div>
+			{ hint && <span className="purgekit-tile__hint">{ hint }</span> }
+		</div>
+	);
+}
+
 const statsCsv = ( days ) => {
 	const base = window.purgekitData?.statsCsvUrl;
 	return base ? `${ base }&days=${ days }` : null;
@@ -190,6 +215,9 @@ export default function Compare( { goTo = () => {} } ) {
 		return <p className="purgekit-layer__when" role="status">{ __( 'Loading…', 'purgekit' ) }</p>;
 	}
 	const gaps = findGaps( data.layers );
+	const shown = data.layers.filter( inUse );
+	const sum = totals( shown );
+	const probe = data.probe;
 	const link = statsCsv( days );
 	return (
 		<div>
@@ -197,6 +225,13 @@ export default function Compare( { goTo = () => {} } ) {
 			<div className="purgekit-layers__bar">
 				<SelectControl __nextHasNoMarginBottom __next40pxDefaultSize label={ __( 'Period', 'purgekit' ) } value={ days } options={ RANGES } onChange={ setDays } />
 				{ link && <a href={ link }>{ __( 'Export CSV', 'purgekit' ) }</a> }
+			</div>
+
+			<div className="purgekit-tiles">
+				<Stat title={ __( 'Layers in use', 'purgekit' ) } value={ shown.length } hint={ __( 'Running, with figures or purges to show', 'purgekit' ) } />
+				<Stat title={ __( 'Purges', 'purgekit' ) } value={ sum.purges } hint={ sum.success === null ? undefined : sprintf( /* translators: %d: percent */ __( '%d%% of the layer purges worked', 'purgekit' ), sum.success ) } />
+				<Stat title={ __( 'Failed', 'purgekit' ) } value={ sum.failed } tone={ sum.failed > 0 ? 'bad' : undefined } hint={ sum.avg_ms ? sprintf( /* translators: %d: milliseconds */ __( '%d ms on average per layer purge', 'purgekit' ), sum.avg_ms ) : undefined } />
+				<Stat title={ __( 'Pages cached', 'purgekit' ) } value={ probe && probe.total ? `${ probe.percent }%` : '–' } hint={ probe && probe.total ? sprintf( /* translators: 1: cached pages, 2: checked pages */ __( '%1$d of %2$d pages checked', 'purgekit' ), probe.cached, probe.total ) : __( 'Not checked yet', 'purgekit' ) } />
 			</div>
 
 			{ gaps.length > 0 && (
@@ -211,16 +246,20 @@ export default function Compare( { goTo = () => {} } ) {
 				</Group>
 			) }
 
-			<Group title={ __( 'Layers side by side', 'purgekit' ) }>
-				<Table rows={ data.layers } />
-				<div className="purgekit-layerbars">
-					<Bars rows={ data.layers } field="hit_rate" kind="quality" title={ __( 'Hit rate', 'purgekit' ) } />
-					<Bars rows={ data.layers } field="memory" kind="usage" title={ __( 'Memory used', 'purgekit' ) } />
-				</div>
-				<p className="purgekit-setting__help">
-					{ __( 'Purge figures come from the history of the period. Hit rate and memory are live figures from the cache itself, for the layers that report them (OPcache, APCu, Redis, Memcached). A CDN keeps its own statistics, which PurgeKit does not read.', 'purgekit' ) }
-				</p>
-			</Group>
+			{ shown.length > 0 ? (
+				<Group title={ __( 'Layers side by side', 'purgekit' ) }>
+					<Table rows={ shown } />
+					<div className="purgekit-layerbars">
+						<Bars rows={ shown } field="hit_rate" kind="quality" title={ __( 'Hit rate', 'purgekit' ) } />
+						<Bars rows={ shown } field="memory" kind="usage" title={ __( 'Memory used', 'purgekit' ) } />
+					</div>
+					<p className="purgekit-setting__help">
+						{ __( 'Only layers that are running and have something to show are listed. Purge figures come from the history of the period. Hit rate and memory are live figures from the cache itself, for the layers that report them (OPcache, APCu, Redis, Memcached). A CDN keeps its own statistics, which PurgeKit does not read.', 'purgekit' ) }
+					</p>
+				</Group>
+			) : (
+				<p>{ __( 'No layer has any purges or figures to show in this period yet. Edit a post, or press Flush now on the Dashboard, and they show up here.', 'purgekit' ) }</p>
+			) }
 
 			<Pages data={ data } onRun={ run } running={ running } goTo={ goTo } />
 		</div>

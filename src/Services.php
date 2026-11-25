@@ -195,7 +195,10 @@ final class Services {
 			$s->queue,
 			$s->scanner,
 			$s->history,
-			static fn( int $now ) => $s->monitor->tick( $now, $s->settings->alertCacheHealth(), $s->settings->siteProbe() ),
+			static function ( int $now ) use ( $s ) {
+				$s->store->set( 'cron_last_run', $now ); // Proof that scheduled work runs, whoever triggers WP-Cron.
+				$s->monitor->tick( $now, $s->settings->alertCacheHealth(), $s->settings->siteProbe() );
+			},
 			static function () use ( $s ) {
 				$days   = 7;
 				$rows   = $s->history->since( gmdate( 'Y-m-d 00:00:00', time() - ( $days - 1 ) * DAY_IN_SECONDS ) );

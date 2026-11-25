@@ -7,7 +7,7 @@ import Health from '../components/Health';
 import Wizard from '../components/Wizard';
 import Impact from '../components/Impact';
 import Layers from '../components/Layers';
-import Compare, { findGaps } from '../components/Compare';
+import Compare, { findGaps, inUse, totals } from '../components/Compare';
 import Settings from '../components/Settings';
 import History, { groupRows } from '../components/History';
 import Inspector from '../components/Inspector';
@@ -1056,6 +1056,7 @@ test( 'Compare shows the layers side by side, the pages with their reasons, and 
 	window.purgekitData = { statsCsvUrl: 'http://x/admin-post.php?action=purgekit_stats_csv&_wpnonce=n' };
 	render( <Compare /> );
 	const row = ( await screen.findByRole( 'cell', { name: /PHP OPcache/ } ) ).closest( 'tr' );
+	expect( screen.queryByRole( 'cell', { name: /Varnish/ } ) ).not.toBeInTheDocument(); // Not detected: left out.
 	expect( within( row ).getByText( '99%' ) ).toBeInTheDocument();
 	expect( within( row ).getByRole( 'meter', { name: /memory/i } ) ).toHaveClass( 'is-bad' );
 	expect( screen.getByText( /3 of 4 pages answered by a cache/i ) ).toBeInTheDocument();
@@ -1073,4 +1074,26 @@ test( 'Compare points at the setting when the hourly check is off', async () => 
 	await userEvent.click( await screen.findByRole( 'button', { name: /switch it on/i } ) );
 	expect( goTo ).toHaveBeenCalledWith( 'settings:alerts' );
 	expect( screen.getByText( /nothing was checked yet/i ) ).toBeInTheDocument();
+} );
+
+
+test( 'Compare lists only layers that run and have something to show, and totals them', () => {
+	const rows = [
+		...COMPARE.layers,
+		{ id: 'apcu', label: 'APCu', tier: 6, tier_label: 'PHP code cache', state: 'off', purges: 4, failed: 1, success_rate: 80, avg_ms: 10, slowest_ms: 20, full: 4, urls: 0, hit_rate: null, memory: null, figures: [] },
+		{ id: 'transients', label: 'Transients', tier: 9, tier_label: 'Object cache', state: 'active', purges: 0, failed: 0, success_rate: null, avg_ms: 0, slowest_ms: 0, full: 0, urls: 0, hit_rate: null, memory: null, figures: [] },
+	];
+	expect( rows.filter( inUse ).map( ( r ) => r.id ) ).toEqual( [ 'object-cache', 'opcache' ] );
+	const t = totals( rows.filter( inUse ) );
+	expect( t ).toMatchObject( { purges: 12, failed: 1, success: 92 } );
+	expect( t.avg_ms ).toBe( 13 ); // (5 ms x 10 + 40 ms x 3) / 13 purges
+	expect( totals( [] ).success ).toBeNull();
+} );
+
+test( 'Compare shows the tiles at the top and a message when there is nothing to list', async () => {
+	api.getCompare.mockResolvedValue( { ...COMPARE, layers: [ COMPARE.layers[ 2 ] ] } );
+	render( <Compare /> );
+	expect( await screen.findByText( /no layer has any purges or figures/i ) ).toBeInTheDocument();
+	expect( screen.getByText( 'Layers in use' ) ).toBeInTheDocument();
+	expect( screen.getByText( /3 of 4 pages checked/ ) ).toBeInTheDocument();
 } );

@@ -8,7 +8,8 @@ use PurgeKit\Core\Health;
  * Pure functions: the REST controller gathers the facts (some need network calls), this decides what they mean.
  */
 final class Audit {
-	private const DAY = 86400;
+	private const DAY  = 86400;
+	private const HOUR = 3600;
 
 	public const OLD_KEY_DAYS    = 365;
 	public const WEAK_KEY_LENGTH = 32;
@@ -105,11 +106,20 @@ final class Audit {
 		return self::check( 'alerts', Health::GOOD, 'Failed purges are reported', 'Alerts go to: ' . implode( ', ', $channels ) . '.' );
 	}
 
-	public static function cron( bool $cron_disabled, bool $needs_cron ): ?array {
-		if ( $cron_disabled && $needs_cron ) {
-			return self::check( 'cron', Health::RECOMMENDED, 'WP-Cron is switched off', 'Scheduled flushes, delayed rule jobs and cache warming need it. Make sure a server cron job calls wp-cron.php.' );
+	/**
+	 * Switching WP-Cron off in wp-config.php is fine when a server cron job runs wp-cron.php instead, so what counts is
+	 * whether scheduled work really ran lately. PurgeKit's own hourly job leaves a time stamp each time it runs.
+	 *
+	 * @param int|null $last_run When the hourly job last ran (unix time), or null when it never has.
+	 */
+	public static function cron( bool $cron_disabled, bool $needs_cron, ?int $last_run = null, int $now = 0 ): ?array {
+		if ( ! $cron_disabled || ! $needs_cron ) {
+			return null;
 		}
-		return null;
+		if ( null !== $last_run && $now > 0 && $now - $last_run < 3 * self::HOUR ) {
+			return self::check( 'cron', Health::GOOD, 'WP-Cron is switched off, and scheduled jobs still run', sprintf( 'A server cron job is calling wp-cron.php: PurgeKit\'s hourly job last ran %d minutes ago.', max( 0, intdiv( $now - $last_run, 60 ) ) ) );
+		}
+		return self::check( 'cron', Health::RECOMMENDED, 'WP-Cron is switched off and nothing seems to run it', 'Scheduled flushes, delayed rule jobs and cache warming need it, and PurgeKit\'s hourly job has not run in the last three hours. Make sure a server cron job calls wp-cron.php.' );
 	}
 
 	/** @param array{count:int,window:int}|null $storm */

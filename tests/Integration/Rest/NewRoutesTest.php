@@ -211,6 +211,17 @@ final class NewRoutesTest extends \WP_UnitTestCase {
 		$this->svc->store->delete( 'alert_digest' );
 	}
 
+	public function test_the_hourly_job_leaves_a_time_stamp_the_health_check_can_use(): void {
+		$this->svc->store->delete( 'cron_last_run' );
+		$this->svc->cron->run_sample();
+		$this->assertEqualsWithDelta( time(), (int) $this->svc->store->get( 'cron_last_run' ), 5 );
+		$this->svc->store->delete( 'cron_last_run' );
+		$this->svc->store->delete( 'probe_last' );
+		$this->svc->store->delete( 'probe_series' );
+		$this->svc->store->delete( 'metric_series' );
+		$this->svc->store->delete( 'health_state' );
+	}
+
 	public function test_the_stats_download_link_carries_a_nonce(): void {
 		$this->assertStringContainsString( '_wpnonce=', \PurgeKit\Admin\StatsExport::url() );
 		$this->assertStringContainsString( 'action=purgekit_stats_csv', \PurgeKit\Admin\StatsExport::url() );

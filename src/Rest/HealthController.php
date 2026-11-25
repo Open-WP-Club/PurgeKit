@@ -64,7 +64,7 @@ final class HealthController extends AbstractController {
 		if ( $network ) {
 			$all[] = Audit::slack( $s->notifier->probeSlack() );
 		}
-		$all[] = Audit::cron( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON, 'scheduled' === $s->settings->mode() || count( $s->deferred->all() ) > 0 || $s->settings->warmEnabled() );
+		$all[] = Audit::cron( defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON, 'scheduled' === $s->settings->mode() || count( $s->deferred->all() ) > 0 || $s->settings->warmEnabled(), is_numeric( $s->store->get( 'cron_last_run' ) ) ? (int) $s->store->get( 'cron_last_run' ) : null, $now );
 		$trip  = $s->storm->tripped( $now );
 		$all[] = Audit::storm( $trip, $s->settings->stormPause() );
 

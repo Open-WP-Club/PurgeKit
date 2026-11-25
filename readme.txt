@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,11 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.3.1 =
+* Changed: the Compare tab is a dashboard: totals at the top, and only layers that are running and have purges or figures to show are listed.
+* Fix: Health no longer calls a switched-off WP-Cron a problem while scheduled jobs still run (for example from a server cron job). It checks that PurgeKit's hourly job ran in the last three hours.
+* Fix: the site check no longer sets suppress_filters in its post query (Plugin Check).
 
 = 0.3.0 =
 * New: Compare tab. Every cache layer side by side (purges, failures, speed, hit rate, memory), what is missing from the stack, and which pages of your site no cache answers, with the reason, and how the share of cached pages moves over time.
