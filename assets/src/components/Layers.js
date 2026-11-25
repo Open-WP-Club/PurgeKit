@@ -1,7 +1,7 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
-import { getLayers, purgeLayer, setLayerEnabled, testLayer } from '../api';
+import { getLayers, getLayerStats, purgeLayer, setLayerEnabled, testLayer } from '../api';
 import { ago, Badge, STATUS_LABEL, toDate, TONE } from '../ui';
 
 const STALE_DAYS = 7;
@@ -31,7 +31,62 @@ function Outcome( { label, result, empty, staleAfterDays } ) {
 	);
 }
 
-function Layer( { l, check, working, onAct, onToggle } ) {
+/** A thin bar that goes amber and red when a memory gauge fills up, or when a hit rate drops. */
+export function Meter( { percent, kind, label } ) {
+	const p = Math.max( 0, Math.min( 100, percent ) );
+	let tone = 'ok';
+	if ( kind === 'usage' ) {
+		tone = p > 90 ? 'bad' : p > 75 ? 'warn' : 'ok';
+	} else if ( kind === 'quality' ) {
+		tone = p < 50 ? 'bad' : p < 80 ? 'warn' : 'ok';
+	}
+	return (
+		<span className={ `purgekit-meter is-${ tone }` } role="meter" aria-label={ label } aria-valuemin={ 0 } aria-valuemax={ 100 } aria-valuenow={ Math.round( p ) }>
+			<span style={ { width: `${ p }%` } } />
+		</span>
+	);
+}
+
+/** The numbers of one layer: live figures from the cache, and what its purges did in the period. */
+export function Numbers( { stats, metrics, days } ) {
+	const hasStats = stats && stats.purges + stats.failed > 0;
+	if ( ! hasStats && ! ( metrics && metrics.length ) ) {
+		return null;
+	}
+	return (
+		<div className="purgekit-layer__numbers">
+			{ ( metrics || [] ).map( ( m ) => (
+				<span key={ m.label } className="purgekit-stat">
+					<small>{ m.label }</small>
+					<strong>{ m.value }</strong>
+					{ typeof m.percent === 'number' && <Meter percent={ m.percent } kind={ m.meter } label={ m.label } /> }
+				</span>
+			) ) }
+			{ hasStats && (
+				<>
+					<span className="purgekit-stat">
+						<small>{ sprintf( /* translators: %d: days */ __( 'Purges, %d days', 'purgekit' ), days ) }</small>
+						<strong>{ stats.purges }</strong>
+					</span>
+					{ stats.failed > 0 && (
+						<span className="purgekit-stat is-bad">
+							<small>{ __( 'Failed', 'purgekit' ) }</small>
+							<strong>{ stats.failed }</strong>
+						</span>
+					) }
+					{ stats.avg_ms > 0 && (
+						<span className="purgekit-stat">
+							<small>{ __( 'Average time', 'purgekit' ) }</small>
+							<strong>{ `${ stats.avg_ms } ms` }</strong>
+						</span>
+					) }
+				</>
+			) }
+		</div>
+	);
+}
+
+function Layer( { l, check, working, onAct, onToggle, stats, metrics, days } ) {
 	const off = l.enabled === false;
 	return (
 		<li className="purgekit-layer" id={ `purgekit-layer-${ l.id }` }>
@@ -47,6 +102,7 @@ function Layer( { l, check, working, onAct, onToggle } ) {
 					) }
 				</div>
 				<Outcome label={ __( 'Last purge', 'purgekit' ) } result={ l.last } empty={ __( 'No purge recorded yet', 'purgekit' ) } />
+				<Numbers stats={ stats } metrics={ metrics } days={ days } />
 				<Outcome label={ __( 'Last check', 'purgekit' ) } result={ check } empty={ __( 'Not checked yet', 'purgekit' ) } staleAfterDays={ STALE_DAYS } />
 			</div>
 			<div className="purgekit-layer__actions">
@@ -70,6 +126,7 @@ export default function Layers() {
 	const [ checks, setChecks ] = useState( {} );
 	const [ refreshing, setRefreshing ] = useState( false );
 	const [ checkingAll, setCheckingAll ] = useState( false );
+	const [ numbers, setNumbers ] = useState( { days: 30, layers: {}, metrics: {} } );
 
 	const load = async () => {
 		setRefreshing( true );
@@ -79,8 +136,10 @@ export default function Layers() {
 			setRefreshing( false );
 		}
 	};
+	const loadNumbers = () => Promise.resolve( getLayerStats( 30 ) ).then( ( n ) => n && setNumbers( n ) ).catch( () => {} );
 	useEffect( () => {
 		load();
+		loadNumbers();
 	}, [] );
 
 	const act = async ( id, kind ) => {
@@ -91,7 +150,8 @@ export default function Layers() {
 				setChecks( ( c ) => ( { ...c, [ id ]: { status: res.status, message: res.message, at: res.at || Math.floor( Date.now() / 1000 ) } } ) );
 			} else {
 				await purgeLayer( id );
-				await load(); // The purge is in the history now, so the last-purge line updates.
+				await load();
+				loadNumbers(); // The purge is in the history now, so the last-purge line updates.
 			}
 		} catch ( e ) {
 			setChecks( ( c ) => ( { ...c, [ id ]: { status: 'failed', message: e.message, at: Math.floor( Date.now() / 1000 ) } } ) );
@@ -139,7 +199,7 @@ export default function Layers() {
 				<Button variant="secondary" isBusy={ checkingAll } disabled={ checkingAll || detected.length === 0 } onClick={ checkAll }>
 					{ __( 'Check all connections', 'purgekit' ) }
 				</Button>
-				<Button variant="tertiary" isBusy={ refreshing } disabled={ refreshing } onClick={ load }>
+				<Button variant="tertiary" isBusy={ refreshing } disabled={ refreshing } onClick={ () => { load(); loadNumbers(); } }>
 					{ __( 'Refresh', 'purgekit' ) }
 				</Button>
 				<span className="purgekit-layer__when">
@@ -151,7 +211,7 @@ export default function Layers() {
 					<h3>{ g.name }</h3>
 					<ul className="purgekit-layer-list">
 						{ g.layers.map( ( l ) => (
-							<Layer key={ l.id } l={ l } check={ checks[ l.id ] || l.checked } working={ busy[ l.id ] } onAct={ act } onToggle={ toggle } />
+							<Layer key={ l.id } l={ l } stats={ numbers.layers?.[ l.id ] } metrics={ numbers.metrics?.[ l.id ] } days={ numbers.days } check={ checks[ l.id ] || l.checked } working={ busy[ l.id ] } onAct={ act } onToggle={ toggle } />
 						) ) }
 					</ul>
 				</section>

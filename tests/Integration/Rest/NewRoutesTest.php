@@ -123,6 +123,21 @@ final class NewRoutesTest extends \WP_UnitTestCase {
 		$this->assertSame( 400, $this->call( 'GET', '/history', array( 'layer' => 'x" OR 1=1' ) )->get_status(), 'Only plain layer ids are accepted.' );
 	}
 
+	public function test_layer_stats_combine_the_history_with_live_numbers(): void {
+		$this->record_layer( 'object-cache', 'ok' );
+		$this->record_layer( 'object-cache', 'failed' );
+		$d = $this->call( 'GET', '/layers/stats', array( 'days' => 7 ) )->get_data();
+		$this->assertSame( 7, $d['days'] );
+		$this->assertSame( 1, $d['layers']->{'object-cache'}['purges'] );
+		$this->assertSame( 1, $d['layers']->{'object-cache'}['failed'] );
+		$this->assertSame( 50, $d['layers']->{'object-cache'}['success_rate'] );
+		$kinds = array_column( $d['metrics']->{'object-cache'}, 'label' );
+		$this->assertContains( 'Kind', $kinds );
+		$this->assertSame( 400, $this->call( 'GET', '/layers/stats', array( 'days' => 5 ) )->get_status() );
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'GET', '/layers/stats' )->get_status() );
+	}
+
 	public function test_a_flush_storm_shows_up_and_can_be_reset(): void {
 		$run = new Run( Run::OK, array(), PurgePlan::everything() );
 		for ( $i = 0; $i < 5; $i++ ) {

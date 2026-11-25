@@ -51,6 +51,7 @@ export const retryFlush = ( layers, urls ) =>
 export const resetStorm = () => apiFetch( { path: `${ NS }/storm/reset`, method: 'POST' } );
 export const getHealth = () => apiFetch( { path: `${ NS }/health` } );
 export const runHealth = () => apiFetch( { path: `${ NS }/health`, method: 'POST' } );
+export const getLayerStats = ( days = 30 ) => apiFetch( { path: `${ NS }/layers/stats?days=${ days }` } );
 export const getImpact = ( days = 30 ) => apiFetch( { path: `${ NS }/impact?days=${ days }` } );
 export const replayFlush = ( id ) => apiFetch( { path: `${ NS }/history/${ id }/replay`, method: 'POST' } );
 export const bumpAssets = () => apiFetch( { path: `${ NS }/assets/bump`, method: 'POST' } );

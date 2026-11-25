@@ -5,17 +5,21 @@
 	"scripts": {
 		"build": "wp-scripts build assets/src/index.js assets/src/editor.js --output-path=build",
 		"start": "wp-scripts start assets/src/index.js assets/src/editor.js --output-path=build",
-		"test:js": "wp-scripts test-unit-js --passWithNoTests",
+		"test:js": "wp-scripts test-unit-jest --passWithNoTests",
 		"test:php-env": "wp-env run tests-cli --env-cwd=wp-content/plugins/PurgeKit vendor/bin/phpunit -c phpunit-integration.xml.dist"
 	},
 	"devDependencies": {
-		"@wordpress/env": "^10.0.0",
-		"@wordpress/scripts": "^30.0.0",
-		"@wordpress/components": "^28",
-		"@wordpress/api-fetch": "^7",
-		"@testing-library/react": "^16",
-		"@testing-library/jest-dom": "*",
-		"@testing-library/user-event": "*"
+		"@testing-library/jest-dom": "^8.0.0",
+		"@testing-library/react": "^16.3.3",
+		"@testing-library/user-event": "^14.6.13",
+		"@wordpress/api-fetch": "^8.2.0",
+		"@wordpress/components": "^28.13.0",
+		"@wordpress/env": "^12.2.0",
+		"@wordpress/scripts": "^37.2.0",
+		"jest": "^30.5.2",
+		"jest-environment-jsdom": "^30.5.2",
+		"react": "^19.3.1",
+		"react-dom": "^19.3.1"
 	},
 	"packageManager": "pnpm@12.21.0"
 }

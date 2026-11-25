@@ -1,6 +1,8 @@
 <?php
 namespace PurgeKit\Rest;
 
+use PurgeKit\Core\LayerStats;
+use PurgeKit\Layers\Metrics;
 use PurgeKit\Layers\Tier;
 
 final class LayersController extends AbstractController {
@@ -12,6 +14,22 @@ final class LayersController extends AbstractController {
 				'methods'             => 'GET',
 				'callback'            => array( $this, 'list' ),
 				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layers/stats',
+			array(
+				'methods'             => 'GET',
+				'callback'            => array( $this, 'stats' ),
+				'permission_callback' => array( $this, 'can' ),
+				'args'                => array(
+					'days' => array(
+						'type'    => 'integer',
+						'default' => 30,
+						'enum'    => array( 7, 30, 90 ),
+					),
+				),
 			)
 		);
 		register_rest_route(
@@ -65,6 +83,28 @@ final class LayersController extends AbstractController {
 			);
 		}
 		return $rows;
+	}
+
+	/** Numbers per layer: what the history says about its purges, and live figures from the caches on this server. */
+	public function stats( \WP_REST_Request $req ): array {
+		$days  = (int) $req['days'];
+		$since = gmdate( 'Y-m-d 00:00:00', time() - ( $days - 1 ) * DAY_IN_SECONDS );
+		$live  = array();
+		foreach ( $this->services->registry->active() as $layer ) {
+			if ( ! $layer instanceof Metrics ) {
+				continue;
+			}
+			try {
+				$live[ $layer->id() ] = $layer->metrics();
+			} catch ( \Throwable $e ) {
+				$live[ $layer->id() ] = array();
+			}
+		}
+		return array(
+			'days'    => $days,
+			'layers'  => (object) LayerStats::summarise( $this->services->history->since( $since ) ),
+			'metrics' => (object) $live,
+		);
 	}
 
 	public function set_enabled( \WP_REST_Request $req ): array|\WP_Error {

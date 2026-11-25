@@ -62,6 +62,19 @@ final class CachesTest extends TestCase {
 		$this->assertStringContainsString( 'memory 50% used', $layer->test()->message );
 	}
 
+	public function test_apcu_and_transients_show_their_numbers(): void {
+		$a = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( array( 'entries' => 1500, 'hits' => 90, 'misses' => 10, 'mem_used' => 50, 'mem_total' => 100 ) ), false );
+		$m = array_column( $a->metrics(), 'value', 'label' );
+		$this->assertSame( '1,500', $m['Entries'] );
+		$this->assertStringStartsWith( '90.0%', $m['Hit rate'] );
+		$this->assertSame( array(), ( new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( null ), false ) )->metrics() );
+
+		$t = array_column( ( new TransientsLayer( $this->store( 'transients_enabled', true ), $this->transients( false, 40, 3 ) ) )->metrics(), 'value', 'label' );
+		$this->assertSame( array( 'In the database' => '40', 'Expired' => '3' ), $t );
+		$ext = ( new TransientsLayer( $this->store( 'transients_enabled', true ), $this->transients( true ) ) )->metrics();
+		$this->assertSame( 'Stored in', $ext[0]['label'] );
+	}
+
 	public function test_apcu_fails_clearly_when_inactive_or_refusing(): void {
 		$off = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( null ), false );
 		$this->assertSame( LayerResult::FAILED, $off->purgeAll()->status );

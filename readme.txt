@@ -1,10 +1,10 @@
 === PurgeKit ===
 Contributors: mrgkanev, openwpclub
 Tags: cache, purge cache, clear cache, cloudflare, varnish
-Requires at least: 6.4
+Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.2.1
+Stable tag: 0.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,13 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.2.2 =
+* New: numbers for every cache layer. OPcache, APCu, transients and the object cache show entries, hit rate and memory (with a bar that turns red when memory runs out); every layer shows its purges, failures and average time over the last 30 days.
+* New: "By cache layer" in the Impact tab, with two charts and a table.
+* Changed: WordPress 6.6 or newer is required. The admin app uses a script handle (`react-jsx-runtime`) that older versions do not have, so it did not load there.
+* Fix: the history filter uses a fixed query, which also clears the Plugin Check warning.
+* Development: updated @wordpress/scripts, @wordpress/env, React and Jest.
 
 = 0.2.1 =
 * Fix: a layer switched off in the layer map no longer counts as active or as failing on the dashboard; its old failure is listed apart.

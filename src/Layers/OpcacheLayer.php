@@ -1,6 +1,7 @@
 <?php
 namespace PurgeKit\Layers;
 
+use PurgeKit\Core\Bytes;
 use PurgeKit\Core\LayerResult;
 use PurgeKit\Core\Store;
 
@@ -10,7 +11,7 @@ use PurgeKit\Core\Store;
  * Off until it is switched on in Settings. A reset only reaches the PHP process pool that runs it, so
  * it does nothing useful from WP-CLI, which has its own OPcache.
  */
-final class OpcacheLayer extends AbstractLayer {
+final class OpcacheLayer extends AbstractLayer implements Metrics {
 	/** @param bool|null $cli Whether this is the command line; null looks at PHP itself. */
 	public function __construct( private Store $settings, private Opcache $opcache, private ?bool $cli = null ) {}
 
@@ -51,6 +52,48 @@ final class OpcacheLayer extends AbstractLayer {
 			return $this->fail( 'PHP refused to reset OPcache. The host may restrict it (opcache.restrict_api).' );
 		}
 		return $this->ok( sprintf( 'Reset %d cached scripts.', (int) ( $status['opcache_statistics']['num_cached_scripts'] ?? 0 ) ) );
+	}
+
+	public function metrics(): array {
+		$status = $this->opcache->status();
+		if ( null === $status ) {
+			return array();
+		}
+		$memory = (array) ( $status['memory_usage'] ?? array() );
+		$stats  = (array) ( $status['opcache_statistics'] ?? array() );
+		$used   = (float) ( $memory['used_memory'] ?? 0 );
+		$free   = (float) ( $memory['free_memory'] ?? 0 );
+		$wasted = (float) ( $memory['wasted_memory'] ?? 0 );
+		$total  = $used + $free + $wasted;
+		$out    = array(
+			array(
+				'label' => 'Scripts cached',
+				'value' => number_format( (int) ( $stats['num_cached_scripts'] ?? 0 ) ) . ( isset( $stats['max_cached_keys'] ) ? ' of ' . number_format( (int) $stats['max_cached_keys'] ) . ' slots' : '' ),
+			),
+			array(
+				'label'   => 'Hit rate',
+				'value'   => sprintf( '%.1f%%', (float) ( $stats['opcache_hit_rate'] ?? 0 ) ),
+				'percent' => (float) ( $stats['opcache_hit_rate'] ?? 0 ),
+				'meter'   => 'quality',
+			),
+		);
+		if ( $total > 0 ) {
+			$out[] = array(
+				'label'   => 'Memory',
+				'value'   => sprintf( '%s of %s used (%.0f%%)', Bytes::human( $used ), Bytes::human( $total ), 100 * $used / $total ),
+				'percent' => 100 * $used / $total,
+				'meter'   => 'usage',
+			);
+			$out[] = array(
+				'label' => 'Wasted',
+				'value' => sprintf( '%.1f%%', (float) ( $memory['current_wasted_percentage'] ?? 0 ) ),
+			);
+		}
+		$out[] = array(
+			'label' => 'Restarts',
+			'value' => sprintf( '%d (memory %d, keys %d, manual %d)', (int) ( $stats['oom_restarts'] ?? 0 ) + (int) ( $stats['hash_restarts'] ?? 0 ) + (int) ( $stats['manual_restarts'] ?? 0 ), (int) ( $stats['oom_restarts'] ?? 0 ), (int) ( $stats['hash_restarts'] ?? 0 ), (int) ( $stats['manual_restarts'] ?? 0 ) ),
+		);
+		return $out;
 	}
 
 	/** Reports what OPcache is doing and warns about settings that cause trouble. */

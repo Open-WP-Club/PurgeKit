@@ -970,3 +970,36 @@ test( 'Layers: a warning check and an old check are marked', async () => {
 	expect( await screen.findByText( 'Warning' ) ).toBeInTheDocument();
 	expect( screen.getByText( /old, check again/i ) ).toBeInTheDocument();
 } );
+
+
+test( 'Layers show live numbers and the purge statistics of each layer', async () => {
+	api.getLayers.mockResolvedValue( [ { id: 'opcache', label: 'PHP OPcache', tier: 20, tier_label: 'PHP', detected: true, enabled: true, order: 1, last: null, checked: null } ] );
+	api.getLayerStats.mockResolvedValue( { days: 30, layers: { opcache: { purges: 12, failed: 2, avg_ms: 340, slowest_ms: 900, success_rate: 86, full: 12, urls: 0 } }, metrics: { opcache: [ { label: 'Hit rate', value: '93.3%' } ] } } );
+	render( <Layers /> );
+	expect( await screen.findByText( '93.3%' ) ).toBeInTheDocument();
+	expect( screen.getByText( '12' ) ).toBeInTheDocument();
+	expect( screen.getByText( '340 ms' ) ).toBeInTheDocument();
+	expect( screen.getByText( /purges, 30 days/i ) ).toBeInTheDocument();
+} );
+
+test( 'Layers draw a meter that turns red when the memory is nearly full', async () => {
+	api.getLayers.mockResolvedValue( [ { id: 'opcache', label: 'PHP OPcache', tier: 20, tier_label: 'PHP', detected: true, enabled: true, order: 1, last: null, checked: null } ] );
+	api.getLayerStats.mockResolvedValue( { days: 30, layers: {}, metrics: { opcache: [ { label: 'Memory', value: '120 MB of 128 MB used (94%)', percent: 94, meter: 'usage' }, { label: 'Hit rate', value: '99.0%', percent: 99, meter: 'quality' } ] } } );
+	render( <Layers /> );
+	const memory = await screen.findByRole( 'meter', { name: 'Memory' } );
+	expect( memory ).toHaveClass( 'is-bad' );
+	expect( memory ).toHaveAttribute( 'aria-valuenow', '94' );
+	expect( screen.getByRole( 'meter', { name: 'Hit rate' } ) ).toHaveClass( 'is-ok' );
+} );
+
+test( 'Impact lists the numbers of every cache layer', async () => {
+	api.getImpact.mockResolvedValue( { flushes: 3, full: 1, targeted: 2, targeted_share: 67, urls: 5, problems: 0, skipped: 0, layer_purges: 4, avg_ms: 20, per_day: [ { date: '2026-11-25', full: 1, targeted: 2, problems: 0 } ], by_source: { manual: 3 }, by_change: {} } );
+	api.getLayers.mockResolvedValue( [ { id: 'cloudflare', label: 'Cloudflare' } ] );
+	api.getLayerStats.mockResolvedValue( { days: 30, layers: { cloudflare: { purges: 9, failed: 1, skipped: 0, full: 3, urls: 40, avg_ms: 120, slowest_ms: 800, success_rate: 90, last_at: null } }, metrics: {} } );
+	render( <Impact /> );
+	const row = ( await screen.findByRole( 'cell', { name: 'Cloudflare' } ) ).closest( 'tr' );
+	expect( within( row ).getByText( '90%' ) ).toBeInTheDocument();
+	expect( within( row ).getByText( '800 ms' ) ).toBeInTheDocument();
+	expect( within( row ).getByText( '40' ) ).toBeInTheDocument();
+	expect( screen.getByRole( 'img', { name: '9 ok, 1 failed' } ) ).toBeInTheDocument();
+} );

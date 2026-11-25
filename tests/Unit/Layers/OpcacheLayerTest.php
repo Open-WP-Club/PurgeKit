@@ -91,6 +91,18 @@ final class OpcacheLayerTest extends TestCase {
 		$this->assertStringContainsString( 'command line', $r->message );
 	}
 
+	public function test_metrics_give_numbers_and_nothing_when_unreachable(): void {
+		$m = array_column( $this->layer( $this->opcache( $this->status() ) )->metrics(), 'value', 'label' );
+		$this->assertSame( '99.5%', $m['Hit rate'] );
+		$this->assertStringStartsWith( '120', $m['Scripts cached'] );
+		$this->assertStringContainsString( '(50%)', $m['Memory'] );
+		$by = array_column( $this->layer( $this->opcache( $this->status() ) )->metrics(), null, 'label' );
+		$this->assertSame( 'quality', $by['Hit rate']['meter'] );
+		$this->assertSame( 'usage', $by['Memory']['meter'] );
+		$this->assertEqualsWithDelta( 50.0, $by['Memory']['percent'], 0.01 );
+		$this->assertSame( array(), $this->layer( $this->opcache( null ) )->metrics() );
+	}
+
 	public function test_a_full_cache_is_flagged_as_a_warning(): void {
 		$full = $this->layer( $this->opcache( $this->status( array( 'memory_usage' => array( 'used_memory' => 99, 'free_memory' => 1, 'wasted_memory' => 0, 'current_wasted_percentage' => 0 ) ) ) ) )->test();
 		$this->assertSame( LayerResult::OK, $full->status );

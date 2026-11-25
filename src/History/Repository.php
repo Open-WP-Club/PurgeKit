@@ -154,8 +154,8 @@ final class Repository implements HistoryWriter {
 
 	public function recent( int $limit, int $offset, array $filters = array() ): array {
 		global $wpdb;
-		list( $where, $args ) = $this->where( $filters );
-		$rows                 = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i' . $where . ' ORDER BY id DESC LIMIT %d OFFSET %d', array_merge( array( $this->table() ), $args, array( $limit, $offset ) ) ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $where holds only fixed fragments with placeholders.
+		$f    = $this->filter( $filters );
+		$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE (%s = \'\' OR status = %s) AND (%s = \'\' OR results_json LIKE %s) ORDER BY id DESC LIMIT %d OFFSET %d', $this->table(), $f['status'], $f['status'], $f['like'], $f['like'], $limit, $offset ), ARRAY_A );
 		return array_map( array( $this, 'hydrate' ), (array) $rows );
 	}
 
@@ -188,30 +188,24 @@ final class Repository implements HistoryWriter {
 
 	public function count( array $filters = array() ): int {
 		global $wpdb;
-		list( $where, $args ) = $this->where( $filters );
-		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i' . $where, array_merge( array( $this->table() ), $args ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $where holds only fixed fragments with placeholders.
+		$f = $this->filter( $filters );
+		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE (%s = \'\' OR status = %s) AND (%s = \'\' OR results_json LIKE %s)', $this->table(), $f['status'], $f['status'], $f['like'], $f['like'] ) );
 	}
 
 	/**
-	 * The WHERE part for the filters: a flush status, and a layer that took part in the flush.
+	 * The filter values for the fixed WHERE clause above; an empty value means "do not filter on this".
 	 *
 	 * @param array<string,mixed> $filters
-	 * @return array{0:string,1:array<int,string>} SQL with placeholders, and the values for them.
+	 * @return array{status:string,like:string}
 	 */
-	private function where( array $filters ): array {
+	private function filter( array $filters ): array {
 		global $wpdb;
-		$parts = array();
-		$args  = array();
-		if ( ! empty( $filters['status'] ) ) {
-			$parts[] = 'status = %s';
-			$args[]  = (string) $filters['status'];
-		}
-		if ( ! empty( $filters['layer'] ) ) {
+		$layer = (string) ( $filters['layer'] ?? '' );
+		return array(
+			'status' => (string) ( $filters['status'] ?? '' ),
 			// Layer ids are plain slugs, and the results are stored as JSON, so the id appears as "layer":"id".
-			$parts[] = 'results_json LIKE %s';
-			$args[]  = '%' . $wpdb->esc_like( '"layer":"' . (string) $filters['layer'] . '"' ) . '%';
-		}
-		return array( $parts ? ' WHERE ' . implode( ' AND ', $parts ) : '', $args );
+			'like'   => '' === $layer ? '' : '%' . $wpdb->esc_like( '"layer":"' . $layer . '"' ) . '%',
+		);
 	}
 
 	public function prune( int $days ): int {

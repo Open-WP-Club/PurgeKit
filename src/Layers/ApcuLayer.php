@@ -1,6 +1,7 @@
 <?php
 namespace PurgeKit\Layers;
 
+use PurgeKit\Core\Bytes;
 use PurgeKit\Core\LayerResult;
 use PurgeKit\Core\Store;
 
@@ -9,7 +10,7 @@ use PurgeKit\Core\Store;
  * so this also drops other applications' entries; that is why it is off until switched on, and why it
  * only runs when everything is purged. Like OPcache it is per PHP pool and not reachable from WP-CLI.
  */
-final class ApcuLayer extends AbstractLayer {
+final class ApcuLayer extends AbstractLayer implements Metrics {
 	/** @param bool|null $cli Whether this is the command line; null looks at PHP itself. */
 	public function __construct( private Store $settings, private Apcu $apcu, private ?bool $cli = null ) {}
 
@@ -50,6 +51,36 @@ final class ApcuLayer extends AbstractLayer {
 			return $this->fail( 'APCu refused to clear its cache.' );
 		}
 		return $this->ok( sprintf( 'Cleared %d entries.', $status['entries'] ) );
+	}
+
+	public function metrics(): array {
+		$status = $this->apcu->status();
+		if ( null === $status ) {
+			return array();
+		}
+		$lookups = $status['hits'] + $status['misses'];
+		$out     = array(
+			array(
+				'label' => 'Entries',
+				'value' => number_format( $status['entries'] ),
+			),
+			array(
+				'label' => 'Hit rate',
+				'value' => $lookups > 0 ? sprintf( '%.1f%% (%s hits, %s misses)', 100 * $status['hits'] / $lookups, number_format( $status['hits'] ), number_format( $status['misses'] ) ) : 'no lookups yet',
+			) + ( $lookups > 0 ? array(
+				'percent' => 100 * $status['hits'] / $lookups,
+				'meter'   => 'quality',
+			) : array() ),
+		);
+		if ( $status['mem_total'] > 0 ) {
+			$out[] = array(
+				'label'   => 'Memory',
+				'value'   => sprintf( '%s of %s used (%.0f%%)', Bytes::human( $status['mem_used'] ), Bytes::human( $status['mem_total'] ), 100 * $status['mem_used'] / $status['mem_total'] ),
+				'percent' => 100 * $status['mem_used'] / $status['mem_total'],
+				'meter'   => 'usage',
+			);
+		}
+		return $out;
 	}
 
 	public function test(): LayerResult {

@@ -10,7 +10,7 @@ use PurgeKit\Core\Store;
  * demand, but a full rebuild at once can be slow on a busy site. With a persistent object cache the
  * transients live there and the object cache layer already empties them.
  */
-final class TransientsLayer extends AbstractLayer {
+final class TransientsLayer extends AbstractLayer implements Metrics {
 	public function __construct( private Store $settings, private Transients $transients ) {}
 
 	public function id(): string {
@@ -38,6 +38,28 @@ final class TransientsLayer extends AbstractLayer {
 			return $this->ok( 'Transients live in the object cache here; the object cache layer empties them.' );
 		}
 		return $this->ok( sprintf( 'Deleted %d transients.', $this->transients->deleteAll() ) );
+	}
+
+	public function metrics(): array {
+		if ( $this->transients->usesExternalCache() ) {
+			return array(
+				array(
+					'label' => 'Stored in',
+					'value' => 'the object cache, not the database',
+				),
+			);
+		}
+		$count = $this->transients->count();
+		return array(
+			array(
+				'label' => 'In the database',
+				'value' => number_format( $count['total'] ),
+			),
+			array(
+				'label' => 'Expired',
+				'value' => number_format( $count['expired'] ),
+			),
+		);
 	}
 
 	public function test(): LayerResult {

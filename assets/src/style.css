@@ -971,3 +971,83 @@
 	outline-offset: 4px;
 	border-radius: 4px;
 }
+
+.purgekit-layer__numbers {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	margin: 6px 0;
+}
+
+.purgekit-stat {
+	display: inline-flex;
+	flex-direction: column;
+	min-width: 84px;
+	padding: 4px 10px;
+	background: #f6f7f7;
+	border-radius: 4px;
+}
+
+.purgekit-stat small {
+	color: #646970;
+	font-size: 11px;
+}
+
+.purgekit-stat strong {
+	font-size: 13px;
+}
+
+.purgekit-stat.is-bad strong {
+	color: #b32d2e;
+}
+
+.purgekit-meter {
+	display: block;
+	width: 100%;
+	height: 5px;
+	margin-top: 4px;
+	background: #dcdcde;
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.purgekit-meter > span {
+	display: block;
+	height: 100%;
+	background: #00a32a;
+}
+
+.purgekit-meter.is-warn > span {
+	background: #dba617;
+}
+
+.purgekit-meter.is-bad > span {
+	background: #d63638;
+}
+
+.purgekit-layerbars {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 8px 32px;
+	margin-bottom: 16px;
+}
+
+.purgekit-layerbars h4 {
+	margin: 0 0 6px;
+}
+
+.purgekit-impact__stack {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	height: 10px;
+}
+
+.purgekit-impact__stack .is-ok {
+	background: #2271b1;
+	border-radius: 3px 0 0 3px;
+}
+
+.purgekit-impact__stack .is-bad {
+	background: #d63638;
+}

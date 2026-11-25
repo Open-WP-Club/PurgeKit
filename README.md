@@ -9,7 +9,7 @@ Free and open source (GPL-2.0-or-later). No paid tier, no telemetry.
 ## Requirements
 
 - PHP 8.2 to 8.6
-- WordPress 6.4 or newer
+- WordPress 6.6 or newer
 
 ## What it does
 
