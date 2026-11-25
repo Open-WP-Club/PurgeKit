@@ -4,6 +4,7 @@ import { __ } from '@wordpress/i18n';
 import { getStatus } from './api';
 import Dashboard from './components/Dashboard';
 import History from './components/History';
+import Compare from './components/Compare';
 import Impact from './components/Impact';
 import Health from './components/Health';
 import Inspector from './components/Inspector';
@@ -44,6 +45,7 @@ export default function App() {
 		{ name: 'rules', title: __( 'Rules', 'purgekit' ) },
 		{ name: 'history', title: __( 'History', 'purgekit' ) },
 		{ name: 'impact', title: __( 'Impact', 'purgekit' ) },
+		{ name: 'compare', title: __( 'Compare', 'purgekit' ) },
 		{ name: 'health', title: __( 'Health', 'purgekit' ) },
 		{ name: 'settings', title: __( 'Settings', 'purgekit' ) },
 	];
@@ -80,6 +82,12 @@ export default function App() {
 							return (
 								<section className="purgekit-card">
 									<Settings section={ target.section } onSection={ ( s ) => window.history.replaceState( null, '', `#settings:${ s }` ) } />
+								</section>
+							);
+						case 'compare':
+							return (
+								<section className="purgekit-card">
+									<Compare goTo={ goTo } />
 								</section>
 							);
 						case 'health':

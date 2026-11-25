@@ -53,6 +53,21 @@ final class NotifierTest extends TestCase {
 		$this->assertCount( 1, $this->mailer->sent );
 	}
 
+	public function test_a_cache_problem_and_the_weekly_digest_are_sent_but_nothing_for_nothing(): void {
+		$n = $this->notifier();
+		$n->notifyCacheHealth( array() );
+		$this->assertCount( 0, $this->http->requests );
+		$n->notifyCacheHealth( array( 'oc' => array( 'label' => 'Object cache', 'issue' => 'failed', 'message' => 'Redis does not answer' ) ) );
+		$this->assertCount( 1, $this->http->requests );
+		$this->assertStringContainsString( 'Object cache (not working): Redis does not answer', $this->http->requests[0]['args']['body'] );
+		$n->notifyDigest( '[My Site] weekly', "Site: https://a.test\n12 flushes", array( 'event' => 'weekly_digest' ) );
+		$this->assertCount( 2, $this->http->requests );
+		$this->assertCount( 2, $this->mailer->sent );
+		$quiet = $this->notifier( false, '' );
+		$quiet->notifyDigest( 's', 'b', array() );
+		$this->assertCount( 0, $this->http->requests, 'No channel, no message.' );
+	}
+
 	public function test_failed_run_goes_to_slack_and_email(): void {
 		$n = $this->notifier();
 		$n->notify( 'cron', $this->run_with( Run::FAILED ) );

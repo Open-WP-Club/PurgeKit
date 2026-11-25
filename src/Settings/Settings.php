@@ -17,6 +17,9 @@ final class Settings {
 		'storm_pause',
 		'cache_tags',
 		'soft_purge',
+		'alert_cache_health',
+		'alert_digest',
+		'site_probe',
 		'allow_external',
 		'disabled_layers',
 		'exclude_paths',
@@ -122,6 +125,21 @@ final class Settings {
 		return (bool) $this->store->get( 'soft_purge', false );
 	}
 
+	/** Tell someone when a cache itself has a problem (Redis not answering, memory full), not only when a purge fails. */
+	public function alertCacheHealth(): bool {
+		return (bool) $this->store->get( 'alert_cache_health', true );
+	}
+
+	/** A short weekly summary of the numbers, sent to the alert channels. Off until asked for. */
+	public function alertDigest(): bool {
+		return (bool) $this->store->get( 'alert_digest', false );
+	}
+
+	/** Once an hour, fetch a few of the site's own pages as a visitor and note which ones a cache answered. */
+	public function siteProbe(): bool {
+		return (bool) $this->store->get( 'site_probe', true );
+	}
+
 	/** The number added to the site's own CSS and JS addresses; 0 means nothing is added. Never exported. */
 	public function assetVersion(): int {
 		$v = $this->store->get( 'asset_version', 0 );
@@ -180,6 +198,9 @@ final class Settings {
 			'storm_pause'            => $this->stormPause(),
 			'cache_tags'             => $this->cacheTags(),
 			'soft_purge'             => $this->softPurge(),
+			'alert_cache_health'     => $this->alertCacheHealth(),
+			'alert_digest'           => $this->alertDigest(),
+			'site_probe'             => $this->siteProbe(),
 			'onboarded'              => $this->onboarded(),
 			'allow_external'         => $this->allowExternal(),
 			'disabled_layers'        => $this->disabledLayers(),
@@ -206,7 +227,7 @@ final class Settings {
 		if ( isset( $patch['schedule'] ) && in_array( $patch['schedule'], self::SCHEDULES, true ) ) {
 			$this->store->set( 'schedule', $patch['schedule'] );
 		}
-		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'verify_after_flush', 'allow_external', 'storm_pause', 'cache_tags', 'soft_purge', 'onboarded' ) as $flag ) {
+		foreach ( array( 'skip_if_unchanged', 'warm_enabled', 'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'verify_after_flush', 'allow_external', 'storm_pause', 'cache_tags', 'soft_purge', 'alert_cache_health', 'alert_digest', 'site_probe', 'onboarded' ) as $flag ) {
 			if ( isset( $patch[ $flag ] ) ) {
 				$this->store->set( $flag, (bool) $patch[ $flag ] );
 			}

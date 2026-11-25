@@ -7,6 +7,7 @@ import Health from '../components/Health';
 import Wizard from '../components/Wizard';
 import Impact from '../components/Impact';
 import Layers from '../components/Layers';
+import Compare, { findGaps } from '../components/Compare';
 import Settings from '../components/Settings';
 import History, { groupRows } from '../components/History';
 import Inspector from '../components/Inspector';
@@ -1016,4 +1017,60 @@ test( 'Layers draw how a figure moved when there are saved points, and nothing f
 	render( <Layers /> );
 	expect( await screen.findByRole( 'img', { name: /keys over the last 1 days: from 900 to 1200/i } ) ).toBeInTheDocument();
 	expect( screen.queryByRole( 'img', { name: /hit rate over/i } ) ).not.toBeInTheDocument();
+} );
+
+
+const COMPARE = {
+	days: 30,
+	probe_enabled: true,
+	probe_series: [ [ 1000, 50 ], [ 90000, 75 ] ],
+	probe: {
+		at: Math.floor( Date.now() / 1000 ) - 600,
+		total: 4,
+		cached: 3,
+		percent: 75,
+		pages: [
+			{ url: 'https://a.test/', verdict: 'cached', evidence: [ 'Age: 30' ], reasons: [], message: '' },
+			{ url: 'https://a.test/cart/', verdict: 'blocked', evidence: [], reasons: [ 'Cookie woocommerce_items_in_cart: a cart cookie.' ], message: '' },
+		],
+	},
+	layers: [
+		{ id: 'object-cache', label: 'Object cache', tier: 10, tier_label: 'Object cache', state: 'active', purges: 9, failed: 1, success_rate: 90, avg_ms: 5, slowest_ms: 9, full: 9, urls: 0, hit_rate: null, memory: null, figures: [ { label: 'Kind', value: 'Per request only (nothing is kept between requests)' } ] },
+		{ id: 'opcache', label: 'PHP OPcache', tier: 5, tier_label: 'PHP code cache', state: 'active', purges: 3, failed: 0, success_rate: 100, avg_ms: 40, slowest_ms: 90, full: 3, urls: 0, hit_rate: 99, memory: 94, figures: [] },
+		{ id: 'varnish', label: 'Varnish', tier: 40, tier_label: 'Reverse proxy', state: 'not-detected', purges: 0, failed: 0, success_rate: null, avg_ms: 0, slowest_ms: 0, full: 0, urls: 0, hit_rate: null, memory: null, figures: [] },
+	],
+};
+
+test( 'Compare finds the gaps in the stack', () => {
+	const gaps = findGaps( COMPARE.layers ).map( ( g ) => g.text );
+	expect( gaps.some( ( t ) => /no cdn or edge cache/i.test( t ) ) ).toBe( true );
+	expect( gaps.some( ( t ) => /no page cache was detected/i.test( t ) ) ).toBe( true );
+	expect( gaps.some( ( t ) => /only lasts for one page load/i.test( t ) ) ).toBe( true );
+	const failing = findGaps( [ { ...COMPARE.layers[ 0 ], tier_label: 'CDN / edge', failed: 5, success_rate: 50, figures: [] } ] ).map( ( g ) => g.text );
+	expect( failing.some( ( t ) => /only 50% of its purges worked/.test( t ) ) ).toBe( true );
+} );
+
+test( 'Compare shows the layers side by side, the pages with their reasons, and can check again', async () => {
+	api.getCompare.mockResolvedValue( COMPARE );
+	api.runProbe.mockResolvedValue( { probe: { ...COMPARE.probe, total: 5, cached: 5, percent: 100 }, probe_series: [] } );
+	window.purgekitData = { statsCsvUrl: 'http://x/admin-post.php?action=purgekit_stats_csv&_wpnonce=n' };
+	render( <Compare /> );
+	const row = ( await screen.findByRole( 'cell', { name: /PHP OPcache/ } ) ).closest( 'tr' );
+	expect( within( row ).getByText( '99%' ) ).toBeInTheDocument();
+	expect( within( row ).getByRole( 'meter', { name: /memory/i } ) ).toHaveClass( 'is-bad' );
+	expect( screen.getByText( /3 of 4 pages answered by a cache/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /woocommerce_items_in_cart/ ) ).toBeInTheDocument();
+	expect( screen.getByRole( 'link', { name: /export csv/i } ) ).toHaveAttribute( 'href', expect.stringContaining( '&days=30' ) );
+	await userEvent.click( screen.getByRole( 'button', { name: /check now/i } ) );
+	expect( await screen.findByText( /5 of 5 pages answered by a cache/i ) ).toBeInTheDocument();
+	delete window.purgekitData;
+} );
+
+test( 'Compare points at the setting when the hourly check is off', async () => {
+	api.getCompare.mockResolvedValue( { ...COMPARE, probe: null, probe_enabled: false } );
+	const goTo = jest.fn();
+	render( <Compare goTo={ goTo } /> );
+	await userEvent.click( await screen.findByRole( 'button', { name: /switch it on/i } ) );
+	expect( goTo ).toHaveBeenCalledWith( 'settings:alerts' );
+	expect( screen.getByText( /nothing was checked yet/i ) ).toBeInTheDocument();
 } );

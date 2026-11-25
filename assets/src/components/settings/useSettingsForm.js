@@ -19,7 +19,7 @@ const KEYS = [
 	'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone',
 	'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'nginx_cache_path',
 	'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths', 'storm_pause',
-	'cache_tags', 'soft_purge',
+	'cache_tags', 'soft_purge', 'alert_cache_health', 'alert_digest', 'site_probe',
 ];
 
 /** All the state of the settings screen, so every section can stay small. */

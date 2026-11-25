@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.2.3
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,15 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.3.0 =
+* New: Compare tab. Every cache layer side by side (purges, failures, speed, hit rate, memory), what is missing from the stack, and which pages of your site no cache answers, with the reason, and how the share of cached pages moves over time.
+* New: an hourly check of a few of the site's own pages (home, newest posts and pages, the shop page) to see which ones a cache answers. Switch it off in Settings, Alerts.
+* New: alert when a cache itself has a problem (Redis not answering, memory nearly full, keys thrown out, OPcache full). Each problem is reported once.
+* New: optional weekly summary to the alert channels.
+* New: Memcached figures (hit rate, memory, keys, evictions) next to Redis, and a note on what a purge empties in Redis (the whole database, or only the prefix when WP_REDIS_SELECTIVE_FLUSH is set).
+* New: `wp purgekit stats` with `--days`, `--live` and `--format`, and "Export CSV" for the layer table.
+* Note: Memcached figures are read from the drop-in's own clients and were tested against an imitation only.
 
 = 0.2.3 =
 * New: live Redis figures in the Object cache layer: server and version (Redis, Valkey and other Redis-compatible servers, through the Redis Object Cache plugin), hit rate, memory against maxmemory, keys, evicted keys, clients and uptime.

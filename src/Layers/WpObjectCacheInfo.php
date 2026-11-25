@@ -48,11 +48,38 @@ final class WpObjectCacheInfo implements ObjectCacheInfo {
 			'client'         => $client,
 			'request_hits'   => (int) ( $cache->cache_hits ?? 0 ),
 			'request_misses' => (int) ( $cache->cache_misses ?? 0 ),
+			'flush_scope'    => 'redis' === $backend ? $this->flushScope() : '',
 		);
 	}
 
+	/** Redis Object Cache empties only its own keys when both a prefix and WP_REDIS_SELECTIVE_FLUSH are set; otherwise the whole database. */
+	private function flushScope(): string {
+		$prefix = defined( 'WP_REDIS_PREFIX' ) ? trim( (string) WP_REDIS_PREFIX ) : '';
+		if ( '' !== $prefix && defined( 'WP_REDIS_SELECTIVE_FLUSH' ) && WP_REDIS_SELECTIVE_FLUSH ) {
+			return 'Only keys with the prefix ' . $prefix;
+		}
+		return 'The whole Redis database (FLUSHDB). If other sites use it, set WP_REDIS_PREFIX and WP_REDIS_SELECTIVE_FLUSH';
+	}
+
+	/** @return object[] Memcached clients found on the drop-in, whatever it calls them. */
+	private function memcachedClients( object $cache ): array {
+		$found = array();
+		foreach ( array( 'mc', 'default_mcs', 'm', 'memcached', 'client' ) as $prop ) {
+			$value = $cache->$prop ?? null;
+			foreach ( is_array( $value ) ? $value : array( $value ) as $candidate ) {
+				if ( is_object( $candidate ) && method_exists( $candidate, 'getStats' ) ) {
+					$found[ spl_object_id( $candidate ) ] = $candidate;
+				}
+			}
+		}
+		return array_values( $found );
+	}
+
 	public function server(): ?array {
-		$cache  = $this->cache();
+		$cache = $this->cache();
+		if ( $cache && ! $this->redisClient( $cache ) && $this->memcachedClients( $cache ) ) {
+			return $this->memcachedStats( $cache );
+		}
 		$client = $cache ? $this->redisClient( $cache ) : null;
 		if ( ! $client || ! method_exists( $client, 'info' ) ) {
 			return null;
@@ -65,8 +92,26 @@ final class WpObjectCacheInfo implements ObjectCacheInfo {
 		return is_array( $info ) ? RedisInfo::normalise( $info ) : null;
 	}
 
+	/** @return array<string,mixed>|null */
+	private function memcachedStats( object $cache ): ?array {
+		$all = array();
+		foreach ( $this->memcachedClients( $cache ) as $client ) {
+			try {
+				$stats = $client->getStats();
+			} catch ( \Throwable $e ) {
+				continue;
+			}
+			// Two clients may talk to the same server; the address keeps it from being counted twice.
+			$all += is_array( $stats ) ? $stats : array();
+		}
+		return MemcachedInfo::normalise( $all );
+	}
+
 	public function responding(): ?bool {
 		$cache = $this->cache();
+		if ( $cache && ! method_exists( $cache, 'redis_status' ) && $this->memcachedClients( $cache ) ) {
+			return null !== $this->memcachedStats( $cache );
+		}
 		if ( ! $cache || ! method_exists( $cache, 'redis_status' ) ) {
 			return null;
 		}

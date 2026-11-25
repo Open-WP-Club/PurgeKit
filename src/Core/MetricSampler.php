@@ -33,6 +33,37 @@ final class MetricSampler {
 		return $taken;
 	}
 
+	/**
+	 * A fresh local check of every cache that has live figures. Layers that need the network are not asked.
+	 *
+	 * @return array<string,array{label:string,status:string,warn:bool,message:string}>
+	 */
+	public function checks(): array {
+		$out = array();
+		foreach ( $this->registry->active() as $layer ) {
+			if ( ! $layer instanceof Metrics ) {
+				continue;
+			}
+			try {
+				$r                   = $layer->test();
+				$out[ $layer->id() ] = array(
+					'label'   => $layer->label(),
+					'status'  => $r->status,
+					'warn'    => $r->warn,
+					'message' => $r->message,
+				);
+			} catch ( \Throwable $e ) {
+				$out[ $layer->id() ] = array(
+					'label'   => $layer->label(),
+					'status'  => LayerResult::FAILED,
+					'warn'    => false,
+					'message' => $e->getMessage(),
+				);
+			}
+		}
+		return $out;
+	}
+
 	/** @return array<string,array<string,array<int,array{0:int,1:float}>>> Layer => figure => points. */
 	public function series(): array {
 		$out = array();

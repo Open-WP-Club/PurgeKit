@@ -1057,3 +1057,42 @@
 	margin-top: 4px;
 	color: #2271b1;
 }
+
+.purgekit-table-scroll {
+	overflow-x: auto;
+}
+
+.purgekit-compare td,
+.purgekit-compare th {
+	vertical-align: middle;
+}
+
+.purgekit-compare .is-quiet {
+	opacity: 0.6;
+}
+
+.purgekit-compare .purgekit-meter {
+	min-width: 70px;
+}
+
+.purgekit-bad {
+	color: #b32d2e;
+}
+
+.purgekit-compare__summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin: 8px 0 12px;
+}
+
+.purgekit-compare__gaps {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-compare__gaps li {
+	padding: 6px 0;
+}

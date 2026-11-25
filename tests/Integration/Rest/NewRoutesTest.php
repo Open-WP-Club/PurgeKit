@@ -164,6 +164,58 @@ final class NewRoutesTest extends \WP_UnitTestCase {
 		}
 	}
 
+	public function test_compare_lists_every_layer_with_its_state_and_the_probe_can_run(): void {
+		$this->record_layer( 'object-cache', 'ok' );
+		$d = $this->call( 'GET', '/compare', array( 'days' => 7 ) )->get_data();
+		$this->assertSame( 7, $d['days'] );
+		$by = array_column( $d['layers'], null, 'id' );
+		$this->assertSame( 'active', $by['object-cache']['state'] );
+		$this->assertSame( 1, $by['object-cache']['purges'] );
+		$this->assertSame( 'not-detected', $by['varnish']['state'] ?? 'not-detected' );
+		$this->assertTrue( $d['probe_enabled'] );
+		$tiers = array_column( $d['layers'], 'tier' );
+		$sorted = $tiers;
+		rsort( $sorted );
+		$this->assertSame( $sorted, $tiers, 'The outermost layer comes first.' );
+
+		// The site answers the probe with a cached-looking page; no real request leaves the test.
+		add_filter(
+			'pre_http_request',
+			static fn() => array(
+				'headers'  => array( 'age' => '12' ),
+				'body'     => '<html></html>',
+				'response' => array( 'code' => 200, 'message' => 'OK' ),
+				'cookies'  => array(),
+				'filename' => null,
+			)
+		);
+		$probe = $this->call( 'POST', '/compare/probe' )->get_data()['probe'];
+		remove_all_filters( 'pre_http_request' );
+		$this->assertGreaterThan( 0, $probe['total'] );
+		$this->assertSame( 100.0, (float) $probe['percent'] );
+		$this->svc->store->delete( 'probe_last' );
+		$this->svc->store->delete( 'probe_series' );
+
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'subscriber' ) ) );
+		$this->assertSame( 403, $this->call( 'GET', '/compare' )->get_status() );
+		$this->assertSame( 403, $this->call( 'POST', '/compare/probe' )->get_status() );
+	}
+
+	public function test_the_weekly_digest_is_scheduled_only_while_it_is_switched_on(): void {
+		$this->svc->settings->update( array( 'alert_digest' => true ) );
+		$this->svc->cron->sync();
+		$this->assertNotFalse( wp_next_scheduled( \PurgeKit\Wp\Cron::DIGEST ) );
+		$this->svc->settings->update( array( 'alert_digest' => false ) );
+		$this->svc->cron->sync();
+		$this->assertFalse( wp_next_scheduled( \PurgeKit\Wp\Cron::DIGEST ) );
+		$this->svc->store->delete( 'alert_digest' );
+	}
+
+	public function test_the_stats_download_link_carries_a_nonce(): void {
+		$this->assertStringContainsString( '_wpnonce=', \PurgeKit\Admin\StatsExport::url() );
+		$this->assertStringContainsString( 'action=purgekit_stats_csv', \PurgeKit\Admin\StatsExport::url() );
+	}
+
 	public function test_a_flush_storm_shows_up_and_can_be_reset(): void {
 		$run = new Run( Run::OK, array(), PurgePlan::everything() );
 		for ( $i = 0; $i < 5; $i++ ) {

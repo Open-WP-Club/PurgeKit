@@ -221,6 +221,38 @@ final class Notifier {
 		);
 	}
 
+	/**
+	 * A cache itself has a problem (not a failed purge). Each problem is passed in once by HealthWatch.
+	 *
+	 * @param array<string,array{label:string,issue:string,message:string}> $issues
+	 */
+	public function notifyCacheHealth( array $issues ): void {
+		if ( array() === $issues || ! $this->channels() ) {
+			return;
+		}
+		$lines  = array();
+		$failed = array();
+		foreach ( $issues as $id => $i ) {
+			$lines[]       = sprintf( '%s (%s): %s', $i['label'], 'failed' === $i['issue'] ? 'not working' : 'needs attention', $i['message'] );
+			$failed[ $id ] = $i['message'];
+		}
+		$this->deliver(
+			sprintf( '[%s] PurgeKit: a cache needs attention', $this->site_name ),
+			sprintf( "Site: %s\n%s", $this->site_url, implode( "\n", $lines ) ),
+			array(
+				'event'  => 'cache_health',
+				'failed' => $failed,
+			)
+		);
+	}
+
+	/** The weekly summary, already written by Digest. @param array<string,mixed> $event */
+	public function notifyDigest( string $subject, string $body, array $event ): void {
+		if ( $this->channels() ) {
+			$this->deliver( $subject, $body, $event );
+		}
+	}
+
 	/** Sends a test message to every configured channel. @return array<string, string> channel => "ok" or an error. */
 	public function sendTest(): array {
 		return $this->deliver( 'PurgeKit test alert', "This is a test alert from PurgeKit on {$this->site_name} ({$this->site_url}).\nIf you can read this, alerts work.", array( 'event' => 'test' ) );

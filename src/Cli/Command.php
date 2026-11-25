@@ -115,6 +115,54 @@ final class Command {
 		}
 	}
 
+	/**
+	 * Show how each cache layer did: purges, failures, speed, and live figures where the cache has them.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--days=<days>]
+	 * : 7, 30 or 90. Default 30.
+	 *
+	 * [--live]
+	 * : Also print the live figures of each cache (hit rate, memory, keys). From the command line OPcache and APCu are not the web server's, so their figures can be empty.
+	 *
+	 * [--format=<format>]
+	 * : table, json, csv or yaml. Default table.
+	 *
+	 * @param array $args       Positional arguments.
+	 * @param array $assoc_args Flags.
+	 */
+	public function stats( array $args, array $assoc_args ): void {
+		$days = (int) ( $assoc_args['days'] ?? 30 );
+		if ( ! in_array( $days, array( 7, 30, 90 ), true ) ) {
+			\WP_CLI::error( '--days must be 7, 30 or 90.' );
+		}
+		$format = (string) ( $assoc_args['format'] ?? 'table' );
+		$rows   = ( new \PurgeKit\Wp\CompareData( $this->services ) )->rows( $days );
+		$items  = array();
+		foreach ( $rows as $r ) {
+			$items[] = array(
+				'layer'      => $r['label'],
+				'state'      => $r['state'],
+				'purges'     => $r['purges'],
+				'failed'     => $r['failed'],
+				'success'    => null === $r['success_rate'] ? '' : $r['success_rate'] . '%',
+				'avg_ms'     => $r['avg_ms'],
+				'slowest_ms' => $r['slowest_ms'],
+				'hit_rate'   => null === $r['hit_rate'] ? '' : $r['hit_rate'] . '%',
+				'memory'     => null === $r['memory'] ? '' : $r['memory'] . '%',
+			);
+		}
+		\WP_CLI\Utils\format_items( $format, $items, array( 'layer', 'state', 'purges', 'failed', 'success', 'avg_ms', 'slowest_ms', 'hit_rate', 'memory' ) );
+		if ( isset( $assoc_args['live'] ) ) {
+			foreach ( $rows as $r ) {
+				foreach ( $r['figures'] as $f ) {
+					\WP_CLI::line( sprintf( '%s / %s: %s', $r['label'], $f['label'], $f['value'] ) );
+				}
+			}
+		}
+	}
+
 	/** Scan theme and plugin files for changes WordPress never saw. */
 	public function scan( array $args, array $assoc_args ): void {
 		if ( $this->services->scanner->scan() ) {

@@ -81,4 +81,32 @@ final class WpObjectCacheInfoTest extends TestCase {
 		$this->assertFalse( $d['persistent'] );
 		$this->assertSame( 'none', $d['backend'] );
 	}
+
+	public function test_memcached_figures_come_from_the_clients_on_the_drop_in(): void {
+		Monkey\Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+		$mc = new class() {
+			public function getStats(): array {
+				return array( 'a:11211' => array( 'pid' => 1, 'version' => '1.6', 'bytes' => 10, 'limit_maxbytes' => 100, 'get_hits' => 3, 'get_misses' => 1, 'curr_items' => 2 ) );
+			}
+		};
+		$GLOBALS['wp_object_cache'] = new class( $mc ) {
+			public array $mc = array();
+			public function __construct( object $client ) {
+				$this->mc = array( 'default' => $client, 'other' => $client );
+			}
+		};
+		$i = new WpObjectCacheInfo();
+		$this->assertSame( 'other', $i->describe()['backend'], 'Only a class name containing memcache is labelled Memcached.' );
+		$s = $i->server();
+		$this->assertSame( 'Memcached', $s['name'] );
+		$this->assertSame( 2, $s['keys'], 'Two names for one client are counted once.' );
+		$this->assertTrue( $i->responding() );
+	}
+
+	public function test_redis_says_what_a_purge_empties(): void {
+		Monkey\Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+		$GLOBALS['wp_object_cache'] = $this->dropIn( true, array() );
+		$scope = ( new WpObjectCacheInfo() )->describe()['flush_scope'];
+		$this->assertStringContainsString( 'whole Redis database', $scope, 'Without a prefix and the switch, the whole database is emptied.' );
+	}
 }

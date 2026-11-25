@@ -79,6 +79,12 @@ final class ObjectCacheLayer extends AbstractLayer implements Metrics {
 		if ( $s ) {
 			$out = array_merge( $out, $this->serverMetrics( $s ) );
 		}
+		if ( ! empty( $d['flush_scope'] ) ) {
+			$out[] = array(
+				'label' => 'Purging empties',
+				'value' => $d['flush_scope'],
+			);
+		}
 		$seen = $d['request_hits'] + $d['request_misses'];
 		if ( ! $s && $seen > 0 ) {
 			$out[] = array(

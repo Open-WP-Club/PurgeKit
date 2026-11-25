@@ -90,7 +90,7 @@ function LayerBars( { rows, labels } ) {
 }
 
 /** One row per cache layer: purges, failures, how fast, and how many pages were purged one by one. */
-function ByLayer( { stats, labels } ) {
+function ByLayer( { stats, labels, days } ) {
 	const rows = Object.entries( stats ).sort( ( a, b ) => b[ 1 ].purges + b[ 1 ].failed - ( a[ 1 ].purges + a[ 1 ].failed ) );
 	if ( rows.length === 0 ) {
 		return null;
@@ -98,6 +98,7 @@ function ByLayer( { stats, labels } ) {
 	return (
 		<Group title={ __( 'By cache layer', 'purgekit' ) }>
 			<LayerBars rows={ rows } labels={ labels } />
+			{ window.purgekitData?.statsCsvUrl && <p><a href={ `${ window.purgekitData.statsCsvUrl }&days=${ days }` }>{ __( 'Export the layer table as CSV', 'purgekit' ) }</a></p> }
 			<table className="widefat striped">
 				<thead>
 					<tr>
@@ -175,7 +176,7 @@ export default function Impact() {
 				<Stat title={ __( 'With problems', 'purgekit' ) } value={ data.problems } hint={ sprintf( /* translators: %d: number of layer purges */ __( '%d layer purges worked', 'purgekit' ), data.layer_purges ) } />
 			</div>
 
-			<ByLayer stats={ layerStats } labels={ labels } />
+			<ByLayer stats={ layerStats } labels={ labels } days={ days } />
 
 			<Group title={ __( 'Flushes per day', 'purgekit' ) }>
 				<Chart days={ data.per_day } />

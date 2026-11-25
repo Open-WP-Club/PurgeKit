@@ -2,7 +2,7 @@ import { useState } from '@wordpress/element';
 import { Button, SelectControl, TextControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { testAlerts } from '../../api';
-import { Group, Setting } from '../../ui';
+import { Group, Setting, ToggleSetting } from '../../ui';
 import { CHANNELS } from './useSettingsForm';
 
 const LABELS = {
@@ -58,6 +58,11 @@ export default function Alerts( { form } ) {
 						) }
 					</div>
 				) ) }
+			</Group>
+			<Group title={ __( 'Monitoring', 'purgekit' ) }>
+				<ToggleSetting id="pk-health" label={ __( 'Tell me when a cache has a problem', 'purgekit' ) } help={ __( 'Checked once an hour for the caches that can be read from here (Redis, Memcached, OPcache, APCu): not answering, memory nearly full, keys thrown out. Each problem is reported once, not every hour.', 'purgekit' ) } checked={ !! s.alert_cache_health } onChange={ set( 'alert_cache_health' ) } locked={ locked( 'alert_cache_health' ) } />
+				<ToggleSetting id="pk-digest" label={ __( 'Send a weekly summary', 'purgekit' ) } help={ __( 'One message a week to the channels above with the flushes, failures and speed of each layer, and which pages no cache answered.', 'purgekit' ) } checked={ !! s.alert_digest } onChange={ set( 'alert_digest' ) } locked={ locked( 'alert_digest' ) } />
+				<ToggleSetting id="pk-probe" label={ __( 'Check the site’s pages every hour', 'purgekit' ) } help={ __( 'Fetches the home page, the newest posts and pages and the shop page (two requests each) to see which ones a cache answers. Shown in the Compare tab. Only addresses on this site are requested.', 'purgekit' ) } checked={ !! s.site_probe } onChange={ set( 'site_probe' ) } locked={ locked( 'site_probe' ) } />
 			</Group>
 			<Group title={ __( 'What to alert on', 'purgekit' ) }>
 				<Setting id="pk-alert-on" label={ __( 'Alert on', 'purgekit' ) } locked={ locked( 'alert_on' ) }>

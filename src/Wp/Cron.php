@@ -13,6 +13,7 @@ final class Cron {
 	public const SCAN   = 'purgekit_scan';
 	public const PRUNE  = 'purgekit_prune';
 	public const SAMPLE = 'purgekit_sample';
+	public const DIGEST = 'purgekit_digest';
 
 	private const RECURRENCE = array(
 		'hourly' => 'hourly',
@@ -23,13 +24,18 @@ final class Cron {
 		'weekly' => 'purgekit_weekly',
 	);
 
+	/**
+	 * @param (callable(int): mixed)|null $monitor The hourly job, given the time.
+	 * @param (callable(): mixed)|null    $digest  The weekly summary.
+	 */
 	public function __construct(
 		private Settings $settings,
 		private Flusher $flusher,
 		private Queue $queue,
 		private FileScanner $scanner,
 		private Repository $history,
-		private ?\PurgeKit\Core\MetricSampler $sampler = null
+		private mixed $monitor = null,
+		private mixed $digest = null
 	) {}
 
 	public function register(): void {
@@ -38,6 +44,7 @@ final class Cron {
 		add_action( self::SCAN, array( $this, 'run_scan' ) );
 		add_action( self::PRUNE, array( $this, 'run_prune' ) );
 		add_action( self::SAMPLE, array( $this, 'run_sample' ) );
+		add_action( self::DIGEST, array( $this, 'run_digest' ) );
 		// Pick up mode/schedule changes made outside the settings UI (WP-CLI, direct option writes).
 		foreach ( array( 'mode', 'schedule' ) as $key ) {
 			$option = WpStore::PREFIX . $key;
@@ -73,6 +80,11 @@ final class Cron {
 		$this->ensure( self::SCAN, 'hourly' );
 		$this->ensure( self::PRUNE, 'daily' );
 		$this->ensure( self::SAMPLE, 'hourly' );
+		if ( $this->settings->alertDigest() ) {
+			$this->ensure( self::DIGEST, 'purgekit_weekly' );
+		} else {
+			wp_clear_scheduled_hook( self::DIGEST );
+		}
 		if ( 'scheduled' === $this->settings->mode() ) {
 			$this->ensure( self::FLUSH, self::RECURRENCE[ $this->settings->schedule() ] );
 		} else {
@@ -91,7 +103,15 @@ final class Cron {
 	}
 
 	public function run_sample(): void {
-		$this->sampler?->sample( time() );
+		if ( $this->monitor ) {
+			( $this->monitor )( time() );
+		}
+	}
+
+	public function run_digest(): void {
+		if ( $this->digest && $this->settings->alertDigest() ) {
+			( $this->digest )();
+		}
 	}
 
 	public function run_prune(): void {

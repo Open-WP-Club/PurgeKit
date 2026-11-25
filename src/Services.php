@@ -6,7 +6,13 @@ use PurgeKit\Core\EnvironmentGuard;
 use PurgeKit\Core\DeferredJobs;
 use PurgeKit\Core\Executor;
 use PurgeKit\Core\FailureStreaks;
+use PurgeKit\Core\Digest;
+use PurgeKit\Core\Impact;
+use PurgeKit\Core\LayerStats;
 use PurgeKit\Core\MetricSampler;
+use PurgeKit\Core\Monitor;
+use PurgeKit\Inspector\SiteProbe;
+use PurgeKit\Wp\ProbeTargets;
 use PurgeKit\Core\Health;
 use PurgeKit\Core\Flusher;
 use PurgeKit\Core\Planner;
@@ -72,6 +78,8 @@ final class Services {
 	public Flusher $flusher;
 	public Cron $cron;
 	public MetricSampler $sampler;
+	public SiteProbe $probe;
+	public Monitor $monitor;
 	public Warmer $warmer;
 	public Inspector $inspector;
 	public Cacheability $cacheability;
@@ -179,7 +187,26 @@ final class Services {
 		$exts       = apply_filters( 'purgekit_fingerprint_extensions', array( 'php', 'js', 'css', 'json', 'html' ) );
 		$s->scanner = new FileScanner( $s->store, (array) $dirs, (array) $exts );
 		$s->sampler = new MetricSampler( $s->registry, $s->store );
-		$s->cron    = new Cron( $s->settings, $s->flusher, $s->queue, $s->scanner, $s->history, $s->sampler );
+		$s->probe   = new SiteProbe( $s->cacheability, $s->store );
+		$s->monitor = new Monitor( $s->sampler, $s->store, $s->probe, static fn( array $issues ) => $s->notifier->notifyCacheHealth( $issues ), array( ProbeTargets::class, 'urls' ) );
+		$s->cron    = new Cron(
+			$s->settings,
+			$s->flusher,
+			$s->queue,
+			$s->scanner,
+			$s->history,
+			static fn( int $now ) => $s->monitor->tick( $now, $s->settings->alertCacheHealth(), $s->settings->siteProbe() ),
+			static function () use ( $s ) {
+				$days   = 7;
+				$rows   = $s->history->since( gmdate( 'Y-m-d 00:00:00', time() - ( $days - 1 ) * DAY_IN_SECONDS ) );
+				$labels = array();
+				foreach ( $s->registry->all() as $l ) {
+					$labels[ $l->id() ] = $l->label();
+				}
+				$d = Digest::build( wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ), Impact::summarise( $rows, time(), $days ), LayerStats::summarise( $rows ), $labels, $s->probe->latest(), $days );
+				$s->notifier->notifyDigest( $d['subject'], $d['body'], $d['event'] );
+			}
+		);
 		return $s;
 	}
 }

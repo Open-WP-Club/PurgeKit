@@ -74,6 +74,7 @@ final class Plugin {
 		if ( is_admin() ) {
 			add_action( 'admin_init', array( $s->cron, 'sync' ) );
 			( new HistoryExport( $s ) )->register();
+			( new \PurgeKit\Admin\StatsExport( $s ) )->register();
 		}
 		if ( is_multisite() ) {
 			add_action( 'wp_initialize_site', array( self::class, 'new_site' ), 900 );
@@ -180,7 +181,7 @@ final class Plugin {
 	}
 
 	private static function clear_cron(): void {
-		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE, Wp\Cron::SAMPLE ) as $hook ) {
+		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE, Wp\Cron::SAMPLE, Wp\Cron::DIGEST ) as $hook ) {
 			wp_clear_scheduled_hook( $hook );
 		}
 	}

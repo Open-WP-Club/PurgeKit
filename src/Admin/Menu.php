@@ -51,7 +51,16 @@ final class Menu {
 		);
 		$csv_base = HistoryExport::url();
 		wp_enqueue_script( 'purgekit-admin', plugins_url( 'build/index.js', PURGEKIT_FILE ), $asset['dependencies'], $asset['version'], true );
-		wp_add_inline_script( 'purgekit-admin', 'window.purgekitData = ' . wp_json_encode( array( 'csvUrl' => $csv_base ) ) . ';', 'before' );
+		wp_add_inline_script(
+			'purgekit-admin',
+			'window.purgekitData = ' . wp_json_encode(
+				array(
+					'csvUrl'      => $csv_base,
+					'statsCsvUrl' => \PurgeKit\Admin\StatsExport::url(),
+				)
+			) . ';',
+			'before'
+		);
 		wp_set_script_translations( 'purgekit-admin', 'purgekit' );
 		wp_enqueue_style( 'wp-components' );
 		if ( file_exists( $dir . 'style-index.css' ) ) {
