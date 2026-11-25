@@ -12,13 +12,12 @@ final class ProbeTargets {
 		) as $type => $n ) {
 			foreach ( get_posts(
 				array(
-					'post_type'        => $type,
-					'post_status'      => 'publish',
-					'numberposts'      => $n,
-					'orderby'          => 'date',
-					'order'            => 'DESC',
-					'has_password'     => false,
-					'suppress_filters' => true,
+					'post_type'    => $type,
+					'post_status'  => 'publish',
+					'numberposts'  => $n,
+					'orderby'      => 'date',
+					'order'        => 'DESC',
+					'has_password' => false,
 				)
 			) as $post ) {
 				$link = get_permalink( $post );
