@@ -2,17 +2,26 @@ import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { getLayers, purgeLayer, setLayerEnabled, testLayer } from '../api';
-import { ago, Badge, STATUS_LABEL, TONE } from '../ui';
+import { ago, Badge, STATUS_LABEL, toDate, TONE } from '../ui';
+
+const STALE_DAYS = 7;
 
 /** One line such as "Last purge: OK · 2 hours ago · message". */
-function Outcome( { label, result, empty } ) {
+function Outcome( { label, result, empty, staleAfterDays } ) {
+	const age = result?.at ? ( Date.now() - toDate( result.at ).getTime() ) / 86400000 : 0;
+	const stale = staleAfterDays && age > staleAfterDays;
 	return (
 		<div className="purgekit-layer__line">
 			<span className="purgekit-layer__label">{ label }</span>
 			{ result ? (
 				<>
-					<Badge tone={ TONE[ result.status ] || 'muted' }>{ STATUS_LABEL[ result.status ] || result.status }</Badge>
+					{ result.warn && result.status === 'ok' ? (
+						<Badge tone="warn">{ __( 'Warning', 'purgekit' ) }</Badge>
+					) : (
+						<Badge tone={ TONE[ result.status ] || 'muted' }>{ STATUS_LABEL[ result.status ] || result.status }</Badge>
+					) }
 					{ result.at ? <span className="purgekit-layer__when">{ ago( result.at ) }</span> : null }
+					{ stale && <Badge tone="warn">{ __( 'Old, check again', 'purgekit' ) }</Badge> }
 					{ result.message ? <span className="purgekit-layer__msg">{ result.message }</span> : null }
 				</>
 			) : (
@@ -25,7 +34,7 @@ function Outcome( { label, result, empty } ) {
 function Layer( { l, check, working, onAct, onToggle } ) {
 	const off = l.enabled === false;
 	return (
-		<li className="purgekit-layer">
+		<li className="purgekit-layer" id={ `purgekit-layer-${ l.id }` }>
 			<span className="purgekit-layer__order" title={ __( 'Purge order', 'purgekit' ) }>{ l.order }</span>
 			<div className="purgekit-layer__main">
 				<div className="purgekit-layer__name">
@@ -38,7 +47,7 @@ function Layer( { l, check, working, onAct, onToggle } ) {
 					) }
 				</div>
 				<Outcome label={ __( 'Last purge', 'purgekit' ) } result={ l.last } empty={ __( 'No purge recorded yet', 'purgekit' ) } />
-				<Outcome label={ __( 'Last check', 'purgekit' ) } result={ check } empty={ __( 'Not checked yet', 'purgekit' ) } />
+				<Outcome label={ __( 'Last check', 'purgekit' ) } result={ check } empty={ __( 'Not checked yet', 'purgekit' ) } staleAfterDays={ STALE_DAYS } />
 			</div>
 			<div className="purgekit-layer__actions">
 				<Button variant="secondary" size="small" isBusy={ working === 'test' } disabled={ !! working } onClick={ () => onAct( l.id, 'test' ) }>

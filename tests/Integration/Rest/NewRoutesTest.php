@@ -63,6 +63,66 @@ final class NewRoutesTest extends \WP_UnitTestCase {
 		$this->assertFalse( $d['onboarded'] );
 	}
 
+	public function test_status_splits_off_and_failing_layers_and_history_filters_by_layer(): void {
+		$d = $this->call( 'GET', '/status' )->get_data();
+		foreach ( array( 'failing_layers', 'off_failing', 'warning_layers' ) as $key ) {
+			$this->assertIsArray( $d[ $key ], $key );
+		}
+		$this->svc->flusher->flushAll( 'manual' );
+		$layer = $this->svc->registry->active()[0]->id();
+		$this->assertGreaterThan( 0, count( $this->call( 'GET', '/history', array( 'layer' => $layer ) )->get_data()['items'] ) );
+		$none = $this->call( 'GET', '/history', array( 'layer' => 'no-such-layer' ) )->get_data();
+		$this->assertSame( 0, $none['total'] );
+		$this->assertSame( array(), $none['items'] );
+	}
+
+	/** A history row where one layer ended with the given status. */
+	private function record_layer( string $layer, string $status ): void {
+		$run = new Run( $status, array( new \PurgeKit\Core\LayerResult( $layer, $status, 'It broke' ) ), PurgePlan::everything() );
+		$this->svc->history->record( 'manual', $run, array() );
+	}
+
+	public function test_a_failing_layer_is_named_and_a_switched_off_one_is_listed_apart(): void {
+		$this->svc->store->set( 'opcache_enabled', true );
+		$this->svc->store->set( 'apcu_enabled', true );
+		$broken = 'opcache';
+		$off    = 'apcu';
+		$this->record_layer( $broken, 'failed' );
+		$this->record_layer( $off, 'failed' );
+		$before = $this->call( 'GET', '/status' )->get_data();
+		$this->svc->settings->update( array( 'disabled_layers' => array( $off ) ) );
+		$d = $this->call( 'GET', '/status' )->get_data();
+		$this->svc->settings->update( array( 'disabled_layers' => array() ) );
+		$this->svc->store->delete( 'opcache_enabled' );
+		$this->svc->store->delete( 'apcu_enabled' );
+
+		$this->assertSame( $before['layers_active'] - 1, $d['layers_active'], 'A switched-off layer is not active.' );
+		$this->assertSame( array( $broken ), array_column( $d['failing_layers'], 'id' ) );
+		$this->assertSame( 'It broke', $d['failing_layers'][0]['message'] );
+		$this->assertSame( array( $off ), array_column( $d['off_failing'], 'id' ) );
+		$this->assertSame( 1, $d['layers_failing'] );
+	}
+
+	public function test_a_check_with_a_warning_is_reported_and_kept(): void {
+		$id = $this->svc->registry->active()[0]->id();
+		$this->svc->store->set( 'layer_checks', array( $id => array( 'status' => 'ok', 'message' => 'Cache is full', 'ms' => 1, 'at' => time(), 'warn' => true ) ) );
+		$d = $this->call( 'GET', '/status' )->get_data();
+		$this->svc->store->delete( 'layer_checks' );
+		$this->assertSame( array( $id ), array_column( $d['warning_layers'], 'id' ) );
+		$this->assertSame( 'Cache is full', $d['warning_layers'][0]['message'] );
+	}
+
+	public function test_history_filters_by_one_layer_and_by_status_together(): void {
+		$this->record_layer( 'alpha-layer', 'failed' );
+		$this->record_layer( 'beta-layer', 'ok' );
+		$this->record_layer( 'alpha-layer', 'ok' );
+		$all = $this->call( 'GET', '/history', array( 'layer' => 'alpha-layer' ) )->get_data();
+		$this->assertSame( 2, $all['total'] );
+		$bad = $this->call( 'GET', '/history', array( 'layer' => 'alpha-layer', 'status' => 'failed' ) )->get_data();
+		$this->assertSame( 1, $bad['total'] );
+		$this->assertSame( 400, $this->call( 'GET', '/history', array( 'layer' => 'x" OR 1=1' ) )->get_status(), 'Only plain layer ids are accepted.' );
+	}
+
 	public function test_a_flush_storm_shows_up_and_can_be_reset(): void {
 		$run = new Run( Run::OK, array(), PurgePlan::everything() );
 		for ( $i = 0; $i < 5; $i++ ) {

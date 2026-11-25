@@ -154,12 +154,8 @@ final class Repository implements HistoryWriter {
 
 	public function recent( int $limit, int $offset, array $filters = array() ): array {
 		global $wpdb;
-		$status = ! empty( $filters['status'] ) ? (string) $filters['status'] : '';
-		if ( '' !== $status ) {
-			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i WHERE status = %s ORDER BY id DESC LIMIT %d OFFSET %d', $this->table(), $status, $limit, $offset ), ARRAY_A );
-		} else {
-			$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i ORDER BY id DESC LIMIT %d OFFSET %d', $this->table(), $limit, $offset ), ARRAY_A );
-		}
+		list( $where, $args ) = $this->where( $filters );
+		$rows                 = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM %i' . $where . ' ORDER BY id DESC LIMIT %d OFFSET %d', array_merge( array( $this->table() ), $args, array( $limit, $offset ) ) ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $where holds only fixed fragments with placeholders.
 		return array_map( array( $this, 'hydrate' ), (array) $rows );
 	}
 
@@ -192,11 +188,30 @@ final class Repository implements HistoryWriter {
 
 	public function count( array $filters = array() ): int {
 		global $wpdb;
-		$status = ! empty( $filters['status'] ) ? (string) $filters['status'] : '';
-		if ( '' !== $status ) {
-			return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE status = %s', $this->table(), $status ) );
+		list( $where, $args ) = $this->where( $filters );
+		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i' . $where, array_merge( array( $this->table() ), $args ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber,WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $where holds only fixed fragments with placeholders.
+	}
+
+	/**
+	 * The WHERE part for the filters: a flush status, and a layer that took part in the flush.
+	 *
+	 * @param array<string,mixed> $filters
+	 * @return array{0:string,1:array<int,string>} SQL with placeholders, and the values for them.
+	 */
+	private function where( array $filters ): array {
+		global $wpdb;
+		$parts = array();
+		$args  = array();
+		if ( ! empty( $filters['status'] ) ) {
+			$parts[] = 'status = %s';
+			$args[]  = (string) $filters['status'];
 		}
-		return (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i', $this->table() ) );
+		if ( ! empty( $filters['layer'] ) ) {
+			// Layer ids are plain slugs, and the results are stored as JSON, so the id appears as "layer":"id".
+			$parts[] = 'results_json LIKE %s';
+			$args[]  = '%' . $wpdb->esc_like( '"layer":"' . (string) $filters['layer'] . '"' ) . '%';
+		}
+		return array( $parts ? ' WHERE ' . implode( ' AND ', $parts ) : '', $args );
 	}
 
 	public function prune( int $days ): int {

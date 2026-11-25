@@ -26,6 +26,10 @@ final class HistoryController extends AbstractController {
 						'type' => 'string',
 						'enum' => array( 'ok', 'partial', 'failed', 'skipped' ),
 					),
+					'layer'    => array(
+						'type'    => 'string',
+						'pattern' => '^[a-z0-9\\-]+$',
+					),
 				),
 			)
 		);
@@ -82,7 +86,12 @@ final class HistoryController extends AbstractController {
 
 	public function get( \WP_REST_Request $req ): array {
 		$per     = (int) $req['per_page'];
-		$filters = $req['status'] ? array( 'status' => (string) $req['status'] ) : array();
+		$filters = array_filter(
+			array(
+				'status' => (string) $req['status'],
+				'layer'  => (string) $req['layer'],
+			)
+		);
 		return array(
 			'items' => $this->services->history->recent( $per, ( (int) $req['page'] - 1 ) * $per, $filters ),
 			'total' => $this->services->history->count( $filters ),

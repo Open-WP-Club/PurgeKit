@@ -10,8 +10,8 @@ export const previewFlush = ( force = false ) =>
 export const getLayers = () => apiFetch( { path: `${ NS }/layers` } );
 export const testLayer = ( id ) =>
 	apiFetch( { path: `${ NS }/layers/${ encodeURIComponent( id ) }/test`, method: 'POST' } );
-export const getHistory = ( page = 1, status = '' ) =>
-	apiFetch( { path: `${ NS }/history?per_page=20&page=${ page }${ status ? `&status=${ status }` : '' }` } );
+export const getHistory = ( page = 1, status = '', layer = '' ) =>
+	apiFetch( { path: `${ NS }/history?per_page=20&page=${ page }${ status ? `&status=${ status }` : '' }${ layer ? `&layer=${ encodeURIComponent( layer ) }` : '' }` } );
 export const testAlerts = () => apiFetch( { path: `${ NS }/alerts/test`, method: 'POST' } );
 export const getSettings = () => apiFetch( { path: `${ NS }/settings` } );
 export const saveSettings = ( patch ) =>

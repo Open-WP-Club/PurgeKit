@@ -63,9 +63,11 @@ final class CachesTest extends TestCase {
 	}
 
 	public function test_apcu_fails_clearly_when_inactive_or_refusing(): void {
-		$off = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( null ) );
+		$off = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( null ), false );
 		$this->assertSame( LayerResult::FAILED, $off->purgeAll()->status );
 		$this->assertSame( LayerResult::SKIPPED, $off->test()->status );
+		$cli = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( null ), true );
+		$this->assertSame( LayerResult::SKIPPED, $cli->purgeAll()->status, 'The command line cannot reach the web APCu, which is not a failure.' );
 
 		$status = array(
 			'entries'   => 1,
@@ -74,9 +76,10 @@ final class CachesTest extends TestCase {
 			'mem_used'  => 99,
 			'mem_total' => 100,
 		);
-		$refuse = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( $status, false ) );
+		$refuse = new ApcuLayer( $this->store( 'apcu_enabled', true ), $this->apcu( $status, false ), false );
 		$this->assertSame( LayerResult::FAILED, $refuse->purgeAll()->status );
 		$this->assertStringContainsString( 'almost full', $refuse->test()->message );
+		$this->assertTrue( $refuse->test()->warn );
 	}
 
 	private function transients( bool $external, int $total = 5, int $expired = 2 ): Transients {

@@ -10,7 +10,12 @@ use PurgeKit\Core\Store;
  * only runs when everything is purged. Like OPcache it is per PHP pool and not reachable from WP-CLI.
  */
 final class ApcuLayer extends AbstractLayer {
-	public function __construct( private Store $settings, private Apcu $apcu ) {}
+	/** @param bool|null $cli Whether this is the command line; null looks at PHP itself. */
+	public function __construct( private Store $settings, private Apcu $apcu, private ?bool $cli = null ) {}
+
+	private function isCli(): bool {
+		return $this->cli ?? ( 'cli' === PHP_SAPI );
+	}
 
 	public function id(): string {
 		return 'apcu';
@@ -35,7 +40,11 @@ final class ApcuLayer extends AbstractLayer {
 	public function purgeAll(): LayerResult {
 		$status = $this->apcu->status();
 		if ( null === $status ) {
-			return $this->fail( 'APCu is not active in this PHP process. The command line has its own APCu, so purge from the admin or a web request.' );
+			if ( $this->isCli() ) {
+				// Not a fault of the cache: the command line simply cannot reach the web server's APCu.
+				return new LayerResult( $this->id(), LayerResult::SKIPPED, 'The command line has its own APCu, so it was left alone. Purge from the admin or a web request.' );
+			}
+			return $this->fail( 'APCu is not active in this PHP process.' );
 		}
 		if ( ! $this->apcu->clear() ) {
 			return $this->fail( 'APCu refused to clear its cache.' );
@@ -54,11 +63,13 @@ final class ApcuLayer extends AbstractLayer {
 			$parts[] = sprintf( 'hit rate %.1f%%', 100 * $status['hits'] / $lookups );
 		}
 		$note = '';
+		$warn = false;
 		if ( $status['mem_total'] > 0 ) {
 			$used    = 100 * $status['mem_used'] / $status['mem_total'];
 			$parts[] = sprintf( 'memory %.0f%% used', $used );
-			$note    = $used > 95 ? ' The cache is almost full; raise apc.shm_size.' : '';
+			$warn    = $used > 95;
+			$note    = $warn ? ' The cache is almost full; raise apc.shm_size.' : '';
 		}
-		return $this->ok( implode( ', ', $parts ) . '.' . $note );
+		return new LayerResult( $this->id(), LayerResult::OK, implode( ', ', $parts ) . '.' . $note, 0, $warn );
 	}
 }

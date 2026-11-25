@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,14 @@ When you configure Cloudflare, PurgeKit sends your API token and either a "purge
 Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
+
+= 0.2.1 =
+* Fix: a layer switched off in the layer map no longer counts as active or as failing on the dashboard; its old failure is listed apart.
+* Fix: APCu and OPcache are skipped, not failed, when a purge runs from the command line, which cannot reach the web server's cache.
+* New: the dashboard names the failing layers and offers "Show" and "Retry" for each one.
+* New: a check can carry a warning (a full OPcache, an almost full APCu), shown on the layer and on the dashboard; checks older than 7 days are marked.
+* New: History can be filtered by layer (also in the CSV export), and the same failure repeated in a row is folded into one line with a count.
+* New: an alert when one layer fails three purges in a row.
 
 = 0.2.0 =
 * New: Impact tab: how many flushes only touched some pages, how many pages were purged, flushes per day, what started them and what changed.

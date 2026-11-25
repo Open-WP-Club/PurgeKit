@@ -948,3 +948,26 @@
 	justify-content: flex-end;
 	gap: 4px;
 }
+
+.purgekit-tile__notes {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.purgekit-tile__notes li {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 10px;
+}
+
+.purgekit-layer.is-marked {
+	background: #fcf9e8;
+	outline: 2px solid #dba617;
+	outline-offset: 4px;
+	border-radius: 4px;
+}

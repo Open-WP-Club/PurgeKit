@@ -5,6 +5,7 @@ use PurgeKit\Alerts\Notifier;
 use PurgeKit\Core\EnvironmentGuard;
 use PurgeKit\Core\DeferredJobs;
 use PurgeKit\Core\Executor;
+use PurgeKit\Core\FailureStreaks;
 use PurgeKit\Core\Health;
 use PurgeKit\Core\Flusher;
 use PurgeKit\Core\Planner;
@@ -150,6 +151,13 @@ final class Services {
 					$s->store->set( 'last_run', Health::summarise( $run, $source, time() ) );
 				}
 				$s->notifier->notify( $source, $run );
+				$streak = FailureStreaks::advance( (array) $s->store->get( 'layer_streaks', array() ), $run->results );
+				$s->store->set( 'layer_streaks', $streak['streaks'] );
+				$named = array();
+				foreach ( $streak['crossed'] as $id => $c ) {
+					$named[ $id ] = array( 'label' => $s->registry->find( $id )?->label() ?? $id ) + $c;
+				}
+				$s->notifier->notifyLayerStreak( $named );
 				$now = time();
 				if ( $s->storm->record( $source, $run, $now ) ) {
 					$trip = $s->storm->tripped( $now );

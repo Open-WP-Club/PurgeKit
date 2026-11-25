@@ -8,7 +8,7 @@ import Wizard from '../components/Wizard';
 import Impact from '../components/Impact';
 import Layers from '../components/Layers';
 import Settings from '../components/Settings';
-import History from '../components/History';
+import History, { groupRows } from '../components/History';
 import Inspector from '../components/Inspector';
 import Rules from '../components/Rules';
 import Scheduled from '../components/Scheduled';
@@ -272,7 +272,7 @@ test( 'History: status filter reloads and the CSV link carries the filter', asyn
 	const link = await screen.findByRole( 'link', { name: /export csv/i } );
 	expect( link ).toHaveAttribute( 'href', expect.stringContaining( '_wpnonce=abc' ) );
 	await userEvent.selectOptions( screen.getByLabelText( /show/i ), 'failed' );
-	await waitFor( () => expect( api.getHistory ).toHaveBeenLastCalledWith( 1, 'failed' ) );
+	await waitFor( () => expect( api.getHistory ).toHaveBeenLastCalledWith( 1, 'failed', '' ) );
 	expect( screen.getByRole( 'link', { name: /export csv/i } ) ).toHaveAttribute( 'href', expect.stringContaining( '&status=failed' ) );
 	delete window.purgekitData;
 } );
@@ -929,4 +929,44 @@ test( 'Settings: reloading assets asks first, then bumps the version and says wh
 	await userEvent.click( screen.getByRole( 'button', { name: /reload and purge everything/i } ) );
 	expect( api.bumpAssets ).toHaveBeenCalledTimes( 1 );
 	expect( ( await screen.findAllByText( /browsers fetch the css and javascript files again/i ) ).length ).toBeGreaterThan( 0 );
+} );
+
+
+test( 'Dashboard names the failing layer, can retry it, and lists a switched-off layer apart', async () => {
+	api.getStatus.mockResolvedValue( {
+		...STATUS,
+		layers_failing: 1,
+		failing_layers: [ { id: 'cloudflare', label: 'Cloudflare', message: 'Rate limited' } ],
+		off_failing: [ { id: 'apcu', label: 'APCu', message: 'x' } ],
+		warning_layers: [ { id: 'opcache', label: 'PHP OPcache', message: 'The cache is full.' } ],
+	} );
+	api.getLayers.mockResolvedValue( [] );
+	api.purgeLayer.mockResolvedValue( { status: 'ok', results: [] } );
+	render( <Dashboard /> );
+	expect( await screen.findByText( /1 failed their last purge: Cloudflare/ ) ).toBeInTheDocument();
+	expect( screen.getByText( /switched off; its last purge failed/i ) ).toBeInTheDocument();
+	expect( screen.getByText( /the cache is full/i ) ).toBeInTheDocument();
+	await userEvent.click( screen.getByRole( 'button', { name: /^retry$/i } ) );
+	expect( api.purgeLayer ).toHaveBeenCalledWith( 'cloudflare' );
+} );
+
+test( 'History folds repeated identical failures and filters by layer', async () => {
+	const fail = ( id ) => ( { id, status: 'failed', source: 'cron', created_at: '2026-11-25 10:00:00', all: true, urls: [], urls_total: 0, results: [ { layer: 'cloudflare', status: 'failed', message: 'Rate limited', ms: 1 } ] } );
+	const rows = [ fail( 5 ), fail( 4 ), fail( 3 ), { ...fail( 2 ), source: 'manual' } ];
+	const groups = groupRows( rows );
+	expect( groups.map( ( g ) => g.count ) ).toEqual( [ 3, 1 ] );
+	api.getLayers.mockResolvedValue( [ { id: 'cloudflare', label: 'Cloudflare', detected: true } ] );
+	api.getHistory.mockResolvedValue( { items: rows, total: 4 } );
+	render( <History /> );
+	expect( await screen.findByText( '×3' ) ).toBeInTheDocument();
+	await userEvent.selectOptions( await screen.findByLabelText( /^layer$/i ), 'cloudflare' );
+	await waitFor( () => expect( api.getHistory ).toHaveBeenLastCalledWith( 1, '', 'cloudflare' ) );
+} );
+
+test( 'Layers: a warning check and an old check are marked', async () => {
+	const old = Math.floor( Date.now() / 1000 ) - 20 * 86400;
+	api.getLayers.mockResolvedValue( [ { id: 'opcache', label: 'PHP OPcache', tier: 20, tier_label: 'PHP', detected: true, enabled: true, order: 1, last: null, checked: { status: 'ok', warn: true, message: 'The cache is full.', at: old } } ] );
+	render( <Layers /> );
+	expect( await screen.findByText( 'Warning' ) ).toBeInTheDocument();
+	expect( screen.getByText( /old, check again/i ) ).toBeInTheDocument();
 } );

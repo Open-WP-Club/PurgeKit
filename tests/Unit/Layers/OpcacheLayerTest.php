@@ -49,7 +49,7 @@ final class OpcacheLayerTest extends TestCase {
 	private function layer( Opcache $o, bool $on = true ): OpcacheLayer {
 		$store = new FakeStore();
 		$store->set( 'opcache_enabled', $on );
-		return new OpcacheLayer( $store, $o );
+		return new OpcacheLayer( $store, $o, false );
 	}
 
 	public function test_is_off_until_switched_on_and_sits_below_the_object_cache(): void {
@@ -79,8 +79,23 @@ final class OpcacheLayerTest extends TestCase {
 		$o = $this->opcache( null );
 		$r = $this->layer( $o )->purgeAll();
 		$this->assertSame( LayerResult::FAILED, $r->status );
-		$this->assertStringContainsString( 'command line', $r->message );
+		$this->assertStringContainsString( 'not active', $r->message );
 		$this->assertSame( 0, $o->resets );
+	}
+
+	public function test_the_command_line_skips_instead_of_failing(): void {
+		$store = new FakeStore();
+		$store->set( 'opcache_enabled', true );
+		$r = ( new OpcacheLayer( $store, $this->opcache( null ), true ) )->purgeAll();
+		$this->assertSame( LayerResult::SKIPPED, $r->status );
+		$this->assertStringContainsString( 'command line', $r->message );
+	}
+
+	public function test_a_full_cache_is_flagged_as_a_warning(): void {
+		$full = $this->layer( $this->opcache( $this->status( array( 'memory_usage' => array( 'used_memory' => 99, 'free_memory' => 1, 'wasted_memory' => 0, 'current_wasted_percentage' => 0 ) ) ) ) )->test();
+		$this->assertSame( LayerResult::OK, $full->status );
+		$this->assertTrue( $full->warn );
+		$this->assertFalse( $this->layer( $this->opcache( $this->status() ) )->test()->warn );
 	}
 
 	public function test_purge_all_fails_when_php_refuses_the_reset(): void {

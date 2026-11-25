@@ -1,7 +1,7 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button, SelectControl } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
-import { getHistory, replayFlush, retryFlush } from '../api';
+import { getHistory, getLayers, replayFlush, retryFlush } from '../api';
 import { ago, Badge, Live, sourceLabel, StatusBadge, toDate, triggerParts, useMessage } from '../ui';
 
 const STATUSES = [
@@ -13,12 +13,34 @@ const STATUSES = [
 ];
 
 /** The export URL carries a nonce, generated server-side. The status filter is appended here. */
-const csvLink = ( status ) => {
+const csvLink = ( status, layer ) => {
 	const base = window.purgekitData?.csvUrl;
 	if ( ! base ) {
 		return null;
 	}
-	return status ? `${ base }&status=${ encodeURIComponent( status ) }` : base;
+	return base + ( status ? `&status=${ encodeURIComponent( status ) }` : '' ) + ( layer ? `&layer=${ encodeURIComponent( layer ) }` : '' );
+};
+
+/** What went wrong in a flush, as one string; flushes with the same text and trigger count as repeats. */
+const signature = ( row ) =>
+	row.status === 'ok' || row.status === 'skipped'
+		? ''
+		: [ row.status, row.source, ...row.results.filter( ( r ) => r.status === 'failed' ).map( ( r ) => `${ r.layer }:${ r.message }` ) ].join( '|' );
+
+/** Folds neighbouring flushes that failed the same way into the newest one, with a count and the oldest time. */
+export const groupRows = ( rows ) => {
+	const out = [];
+	rows.forEach( ( row ) => {
+		const sig = signature( row );
+		const prev = out[ out.length - 1 ];
+		if ( sig && prev && prev.sig === sig ) {
+			prev.count += 1;
+			prev.oldest = row.created_at;
+			return;
+		}
+		out.push( { row, sig, count: 1, oldest: row.created_at } );
+	} );
+	return out;
 };
 
 const VERIFY_LABELS = {
@@ -38,7 +60,7 @@ function VerificationNote( { v } ) {
 	);
 }
 
-function Row( { row, busy, onReplay, onRetry } ) {
+function Row( { row, busy, onReplay, onRetry, count = 1, oldest } ) {
 	const failed = row.results.filter( ( r ) => r.status === 'failed' );
 	const who = triggerParts( row );
 	const exact = toDate( row.created_at );
@@ -53,6 +75,11 @@ function Row( { row, busy, onReplay, onRetry } ) {
 					<span className="purgekit-layer__when" title={ Number.isNaN( exact.getTime() ) ? '' : exact.toLocaleString() }>
 						{ ago( row.created_at ) || row.created_at }
 					</span>
+					{ count > 1 && (
+						<span title={ sprintf( /* translators: %s: how long ago the first one was */ __( 'The same failure happened %1$d times in a row, the first one %2$s.', 'purgekit' ), count, ago( oldest ) ) }>
+							<Badge tone="warn">{ `×${ count }` }</Badge>
+						</span>
+					) }
 					<span className="purgekit-layer__when">
 						{ row.all ? __( 'everything', 'purgekit' ) : sprintf( /* translators: %d: number of URLs */ __( '%d URLs', 'purgekit' ), row.urls_total ?? row.urls?.length ?? 0 ) }
 					</span>
@@ -99,15 +126,22 @@ function Row( { row, busy, onReplay, onRetry } ) {
 export default function History() {
 	const [ page, setPage ] = useState( 1 );
 	const [ status, setStatus ] = useState( '' );
+	const [ layer, setLayer ] = useState( '' );
+	const [ layerOptions, setLayerOptions ] = useState( [] );
 	const [ data, setData ] = useState( null );
 	const [ error, setError ] = useState( '' );
 	const [ working, setWorking ] = useState( {} );
 	const [ message, setMessage, clear ] = useMessage();
-	const load = () => getHistory( page, status ).then( setData ).catch( ( e ) => setError( e.message ) );
+	useEffect( () => {
+		Promise.resolve( getLayers() )
+			.then( ( ls ) => setLayerOptions( ( ls || [] ).filter( ( l ) => l.detected !== false ).map( ( l ) => ( { value: l.id, label: l.label } ) ) ) )
+			.catch( () => {} );
+	}, [] );
+	const load = () => getHistory( page, status, layer ).then( setData ).catch( ( e ) => setError( e.message ) );
 	useEffect( () => {
 		setError( '' );
 		load();
-	}, [ page, status ] );
+	}, [ page, status, layer ] );
 
 	const act = async ( row, kind, fn ) => {
 		setWorking( ( w ) => ( { ...w, [ row.id ]: kind } ) );
@@ -130,7 +164,7 @@ export default function History() {
 	if ( ! data ) {
 		return <p className="purgekit-layer__when" role="status">{ __( 'Loading…', 'purgekit' ) }</p>;
 	}
-	const link = csvLink( status );
+	const link = csvLink( status, layer );
 	return (
 		<div>
 			<div className="purgekit-layers__bar">
@@ -145,15 +179,28 @@ export default function History() {
 						setStatus( v );
 					} }
 				/>
+				{ layerOptions.length > 0 && (
+					<SelectControl
+						__nextHasNoMarginBottom
+						__next40pxDefaultSize
+						label={ __( 'Layer', 'purgekit' ) }
+						value={ layer }
+						options={ [ { value: '', label: __( 'All layers', 'purgekit' ) }, ...layerOptions ] }
+						onChange={ ( v ) => {
+							setPage( 1 );
+							setLayer( v );
+						} }
+					/>
+				) }
 				{ link && <a href={ link }>{ __( 'Export CSV', 'purgekit' ) }</a> }
 			</div>
 			<Live message={ message } onClear={ clear } />
 			{ data.items.length === 0 ? (
-				<p>{ status ? __( 'No flushes with this status.', 'purgekit' ) : __( 'No flushes yet. Edit a post or press Flush now, and it shows up here.', 'purgekit' ) }</p>
+				<p>{ status || layer ? __( 'No flushes match this filter.', 'purgekit' ) : __( 'No flushes yet. Edit a post or press Flush now, and it shows up here.', 'purgekit' ) }</p>
 			) : (
 				<ul className="purgekit-layer-list">
-					{ data.items.map( ( row ) => (
-						<Row key={ row.id } row={ row } busy={ working[ row.id ] } onReplay={ replay } onRetry={ retry } />
+					{ groupRows( data.items ).map( ( g ) => (
+						<Row key={ g.row.id } row={ g.row } count={ g.count } oldest={ g.oldest } busy={ working[ g.row.id ] } onReplay={ replay } onRetry={ retry } />
 					) ) }
 				</ul>
 			) }

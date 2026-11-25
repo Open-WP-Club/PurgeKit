@@ -196,6 +196,31 @@ final class Notifier {
 		);
 	}
 
+	/**
+	 * One layer failed several purges in a row. Sent once, when the count reaches the limit, so it does not repeat.
+	 *
+	 * @param array<string,array{label:string,count:int,message:string}> $layers
+	 */
+	public function notifyLayerStreak( array $layers ): void {
+		if ( array() === $layers || ! $this->channels() ) {
+			return;
+		}
+		$lines  = array();
+		$failed = array();
+		foreach ( $layers as $id => $l ) {
+			$lines[]       = sprintf( '%s: %d failed purges in a row. %s', $l['label'], $l['count'], $l['message'] );
+			$failed[ $id ] = $l['message'];
+		}
+		$this->deliver(
+			sprintf( '[%s] PurgeKit: a cache layer keeps failing', $this->site_name ),
+			sprintf( "Site: %s\n%s", $this->site_url, implode( "\n", $lines ) ),
+			array(
+				'event'  => 'layer_failing',
+				'failed' => $failed,
+			)
+		);
+	}
+
 	/** Sends a test message to every configured channel. @return array<string, string> channel => "ok" or an error. */
 	public function sendTest(): array {
 		return $this->deliver( 'PurgeKit test alert', "This is a test alert from PurgeKit on {$this->site_name} ({$this->site_url}).\nIf you can read this, alerts work.", array( 'event' => 'test' ) );

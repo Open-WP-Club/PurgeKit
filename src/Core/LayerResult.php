@@ -10,6 +10,7 @@ final class LayerResult {
 		public string $layer,
 		public string $status,
 		public string $message = '',
-		public int $ms = 0
+		public int $ms = 0,
+		public bool $warn = false
 	) {}
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from '@wordpress/element';
 import { Button } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
-import { flush, getLayers, getStatus, resetStorm, retryFlush } from '../api';
+import { flush, getLayers, getStatus, purgeLayer, resetStorm, retryFlush } from '../api';
 import { ago, Badge, Live, sourceLabel, StatusBadge, triggerParts, useMessage } from '../ui';
 import Layers from './Layers';
 import Preview from './Preview';
@@ -14,12 +14,13 @@ const MODE_LABEL = {
 	scheduled: __( 'Scheduled', 'purgekit' ),
 };
 
-function Tile( { title, children, hint } ) {
+function Tile( { title, children, hint, extra } ) {
 	return (
 		<div className="purgekit-tile">
 			<span className="purgekit-tile__title">{ title }</span>
 			<div className="purgekit-tile__value">{ children }</div>
 			{ hint && <span className="purgekit-tile__hint">{ hint }</span> }
+			{ extra }
 		</div>
 	);
 }
@@ -37,6 +38,39 @@ function Week( { week } ) {
 	);
 }
 
+/** Under the layer count: which layers failed (with a retry), which are off but failed, and which warn. */
+function LayerNotes( { status, onShow, onRetry, retrying } ) {
+	const failing = status.failing_layers || [];
+	const off = status.off_failing || [];
+	const warn = status.warning_layers || [];
+	if ( ! failing.length && ! off.length && ! warn.length ) {
+		return null;
+	}
+	return (
+		<ul className="purgekit-tile__notes">
+			{ failing.map( ( l ) => (
+				<li key={ l.id }>
+					<Badge tone="bad">{ l.label }</Badge>
+					<Button variant="link" onClick={ () => onShow( l.id ) } title={ l.message }>{ __( 'Show', 'purgekit' ) }</Button>
+					<Button variant="link" isBusy={ retrying === l.id } disabled={ !! retrying } onClick={ () => onRetry( l.id ) }>{ __( 'Retry', 'purgekit' ) }</Button>
+				</li>
+			) ) }
+			{ warn.map( ( l ) => (
+				<li key={ 'w' + l.id }>
+					<Badge tone="warn">{ l.label }</Badge>
+					<span className="purgekit-layer__when">{ l.message }</span>
+				</li>
+			) ) }
+			{ off.map( ( l ) => (
+				<li key={ 'o' + l.id }>
+					<Badge tone="muted">{ l.label }</Badge>
+					<span className="purgekit-layer__when">{ __( 'Switched off; its last purge failed.', 'purgekit' ) }</span>
+				</li>
+			) ) }
+		</ul>
+	);
+}
+
 export default function Dashboard( { goTo = () => {} } ) {
 	const [ status, setStatus ] = useState( null );
 	const [ loadError, setLoadError ] = useState( '' );
@@ -45,6 +79,8 @@ export default function Dashboard( { goTo = () => {} } ) {
 	const [ confirm, setConfirm ] = useState( false );
 	const [ busy, setBusy ] = useState( false );
 	const [ retrying, setRetrying ] = useState( false );
+	const [ retryingLayer, setRetryingLayer ] = useState( '' );
+	const [ layersEpoch, setLayersEpoch ] = useState( 0 );
 	const [ message, setMessage, clear ] = useMessage();
 
 	const load = () => getStatus().then( ( s ) => { setStatus( s ); setLoadError( '' ); } ).catch( ( e ) => setLoadError( e.message ) );
@@ -78,6 +114,29 @@ export default function Dashboard( { goTo = () => {} } ) {
 			setMessage( { status: 'error', text: e.message } );
 		}
 		setRetrying( false );
+	};
+
+	/** Scrolls to a layer's card further down and marks it for a moment. */
+	const showLayer = ( id ) => {
+		const el = document.getElementById( `purgekit-layer-${ id }` );
+		if ( ! el ) {
+			return;
+		}
+		el.scrollIntoView?.( { behavior: 'smooth', block: 'center' } );
+		el.classList.add( 'is-marked' );
+		setTimeout( () => el.classList.remove( 'is-marked' ), 2500 );
+	};
+
+	const retryLayer = async ( id ) => {
+		setRetryingLayer( id );
+		try {
+			await purgeLayer( id );
+			await load();
+			setLayersEpoch( ( n ) => n + 1 );
+		} catch ( e ) {
+			setMessage( { status: 'error', text: e.message } );
+		}
+		setRetryingLayer( '' );
 	};
 
 	const resume = async () => {
@@ -127,7 +186,7 @@ export default function Dashboard( { goTo = () => {} } ) {
 				<Tile title={ __( 'Last flush', 'purgekit' ) } hint={ last ? `${ sourceLabel( last.source ) } · ${ ago( last.created_at ) }` : undefined }>
 					{ last ? <StatusBadge status={ last.status } /> : <span className="purgekit-layer__when">{ __( 'None yet', 'purgekit' ) }</span> }
 				</Tile>
-				<Tile title={ __( 'Cache layers', 'purgekit' ) } hint={ status.layers_failing > 0 ? sprintf( /* translators: %d: number of layers */ __( '%d failed their last purge', 'purgekit' ), status.layers_failing ) : __( 'Active on this site', 'purgekit' ) }>
+				<Tile title={ __( 'Cache layers', 'purgekit' ) } hint={ status.layers_failing > 0 ? sprintf( /* translators: %d: number of layers */ __( '%d failed their last purge', 'purgekit' ), status.layers_failing ) + ( status.failing_layers?.length ? ': ' + status.failing_layers.map( ( l ) => l.label ).join( ', ' ) : '' ) : __( 'Active on this site', 'purgekit' ) } extra={ <LayerNotes status={ status } onShow={ showLayer } onRetry={ retryLayer } retrying={ retryingLayer } /> }>
 					<strong className="purgekit-tile__number">{ status.layers_active }</strong>
 					{ status.layers_failing > 0 && <Badge tone="bad">{ __( 'Needs attention', 'purgekit' ) }</Badge> }
 				</Tile>
@@ -180,7 +239,7 @@ export default function Dashboard( { goTo = () => {} } ) {
 
 			<section className="purgekit-card">
 				<h2>{ __( 'Cache layers', 'purgekit' ) }</h2>
-				<Layers />
+				<Layers key={ layersEpoch } />
 			</section>
 		</>
 	);

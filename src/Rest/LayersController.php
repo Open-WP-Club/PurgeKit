@@ -98,12 +98,13 @@ final class LayersController extends AbstractController {
 	}
 
 	/** Remembers a connection check, so it is still there after the page is reloaded. */
-	private function remember_check( string $id, string $status, string $message, int $ms ): array {
+	private function remember_check( string $id, string $status, string $message, int $ms, bool $warn = false ): array {
 		$entry         = array(
 			'status'  => $status,
 			'message' => mb_substr( $message, 0, 300 ),
 			'ms'      => $ms,
 			'at'      => time(),
+			'warn'    => $warn,
 		);
 		$checks        = $this->checks();
 		$checks[ $id ] = $entry;
@@ -122,10 +123,12 @@ final class LayersController extends AbstractController {
 			$status = $r->status;
 			$text   = $r->message;
 			$ms     = $r->ms;
+			$warn   = $r->warn;
 		} catch ( \Throwable $e ) {
 			$status = 'failed';
 			$text   = $e->getMessage();
 			$ms     = 0;
+			$warn   = false;
 		}
 		// A layer that is not set up was not checked, so that is not remembered as a result.
 		$entry = 'skipped' === $status ? array(
@@ -133,7 +136,7 @@ final class LayersController extends AbstractController {
 			'message' => $text,
 			'ms'      => $ms,
 			'at'      => time(),
-		) : $this->remember_check( $layer->id(), $status, $text, $ms );
+		) : $this->remember_check( $layer->id(), $status, $text, $ms, $warn );
 		return array( 'layer' => $layer->id() ) + $entry;
 	}
 }

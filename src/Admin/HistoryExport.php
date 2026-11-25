@@ -17,13 +17,16 @@ final class HistoryExport {
 	}
 
 	/** URL the History tab links to; carries a nonce. */
-	public static function url( string $status = '' ): string {
+	public static function url( string $status = '', string $layer = '' ): string {
 		$args = array(
 			'action'   => self::ACTION,
 			'_wpnonce' => wp_create_nonce( self::ACTION ),
 		);
 		if ( '' !== $status ) {
 			$args['status'] = $status;
+		}
+		if ( '' !== $layer ) {
+			$args['layer'] = $layer;
 		}
 		return add_query_arg( $args, admin_url( 'admin-post.php' ) );
 	}
@@ -34,7 +37,11 @@ final class HistoryExport {
 			wp_die( esc_html__( 'You are not allowed to do this.', 'purgekit' ), 403 );
 		}
 		$status  = isset( $_GET['status'] ) ? sanitize_key( wp_unslash( $_GET['status'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Checked above.
+		$layer   = isset( $_GET['layer'] ) ? sanitize_key( wp_unslash( $_GET['layer'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Checked above.
 		$filters = in_array( $status, array( 'ok', 'partial', 'failed', 'skipped' ), true ) ? array( 'status' => $status ) : array();
+		if ( '' !== $layer ) {
+			$filters['layer'] = $layer;
+		}
 
 		nocache_headers();
 		header( 'Content-Type: text/csv; charset=utf-8' );

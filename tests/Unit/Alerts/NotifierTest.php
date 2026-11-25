@@ -43,6 +43,16 @@ final class NotifierTest extends TestCase {
 		return new Run( $status, array( new LayerResult( 'cloudflare', $layer_status, 'Invalid <token>' ) ) );
 	}
 
+	public function test_a_layer_that_keeps_failing_is_reported_once_per_call(): void {
+		$n = $this->notifier();
+		$n->notifyLayerStreak( array() );
+		$this->assertCount( 0, $this->http->requests );
+		$n->notifyLayerStreak( array( 'cf' => array( 'label' => 'Cloudflare', 'count' => 3, 'message' => 'Rate limited' ) ) );
+		$this->assertCount( 1, $this->http->requests );
+		$this->assertStringContainsString( 'Cloudflare: 3 failed purges in a row', $this->http->requests[0]['args']['body'] );
+		$this->assertCount( 1, $this->mailer->sent );
+	}
+
 	public function test_failed_run_goes_to_slack_and_email(): void {
 		$n = $this->notifier();
 		$n->notify( 'cron', $this->run_with( Run::FAILED ) );
