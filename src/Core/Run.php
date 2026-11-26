@@ -10,6 +10,8 @@ final class Run {
 
 	/** @var string[] Names of the rules that decided this run. */
 	public array $rules = array();
+	/** @var array<int,array<string,mixed>> Bounded execution plan for history. */
+	public array $jobs = array();
 	/** @var int Jobs a rule postponed (they run later and are recorded as their own flush). */
 	public int $deferred = 0;
 	/** @var array<string,mixed>|null What the check after the flush found (Verifier output). */

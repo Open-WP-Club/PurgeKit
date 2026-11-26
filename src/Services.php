@@ -130,7 +130,7 @@ final class Services {
 		$s->cacheability = new Cacheability( $s->http, $s->registry );
 		$s->verifier     = new Verifier( new Inspector( $s->http, $s->registry, new WpClock(), 5 ), home_url( '/' ) );
 
-		$s->warmer   = new Warmer( $s->http, $s->store, home_url( '/' ), 5, static fn() => (array) apply_filters( 'purgekit_preload_urls', array() ), new SitemapReader( $s->http, home_url( '/' ), (array) apply_filters( 'purgekit_sitemap_paths', SitemapReader::PATHS ) ) );
+		$s->warmer   = new Warmer( $s->http, $s->store, home_url( '/' ), 5, static fn() => (array) apply_filters( 'purgekit_preload_urls', array() ), new SitemapReader( $s->http, home_url( '/' ), (array) apply_filters( 'purgekit_sitemap_paths', SitemapReader::PATHS ) ), new WpClock(), $s->lock );
 		$s->notifier = new Notifier( $s->http, new WpMailer(), $s->settings, $s->secrets, $s->store, new WpClock(), wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ), home_url( '/' ) );
 		$host        = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
 		$s->guard    = new EnvironmentGuard( wp_get_environment_type(), $host, $s->settings->homeHost(), $s->settings->allowExternal() );

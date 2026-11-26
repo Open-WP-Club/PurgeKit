@@ -56,10 +56,16 @@ final class InspectorTest extends TestCase {
 		$this->assertNull( $r['layer'] );
 	}
 
-	public function test_status_difference_counts(): void {
+	public function test_http_error_status_is_reported_as_an_error(): void {
 		$i = $this->inspector();
 		$this->http->queue( new HttpResponse( 404, 'x' ), new HttpResponse( 200, 'x' ) );
-		$this->assertSame( Inspector::DIFFERENT, $i->inspect( 'https://a.test/' )['verdict'] );
+		$this->assertSame( Inspector::ERROR, $i->inspect( 'https://a.test/' )['verdict'] );
+	}
+
+	public function test_matching_server_errors_are_never_reported_as_fresh_content(): void {
+		$i = $this->inspector();
+		$this->http->queue( new HttpResponse( 503, 'error' ), new HttpResponse( 503, 'error' ) );
+		$this->assertSame( Inspector::ERROR, $i->inspect( 'https://a.test/' )['verdict'] );
 	}
 
 	public function test_transport_error(): void {

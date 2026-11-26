@@ -23,10 +23,11 @@ final class Inspector {
 	public function __construct( private Http $http, private Registry $registry, private Clock $clock, private int $timeout = 15 ) {}
 
 	/** @return array{verdict:string,url:string,message:string,layer:?string,served_by:array<int,array{layer:string,label:string,evidence:string,tier:int}>,visitor:array,fresh:array} */
-	public function inspect( string $url ): array {
+	public function inspect( string $url, array $headers = array() ): array {
 		$args = array(
-			'headers' => array( 'X-PurgeKit-Inspect' => '1' ),
-			'timeout' => $this->timeout,
+			'headers'     => array_merge( $headers, array( 'X-PurgeKit-Inspect' => '1' ) ),
+			'timeout'     => $this->timeout,
+			'redirection' => 0,
 		);
 		try {
 			$visitor = $this->http->request( 'GET', $url, $args );
@@ -35,6 +36,9 @@ final class Inspector {
 			return $this->result( self::ERROR, $url, 'Could not fetch the URL: ' . $e->getMessage() );
 		}
 
+		if ( $visitor->status >= 400 || $fresh->status >= 400 ) {
+			return $this->result( self::ERROR, $url, 'Could not compare content: a request returned an HTTP error.', null, array(), $visitor, $fresh );
+		}
 		$headers   = array_change_key_case( $visitor->headers, CASE_LOWER );
 		$served_by = array();
 		foreach ( $this->registry->all() as $layer ) {

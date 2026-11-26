@@ -33,11 +33,16 @@ final class Planner {
 
 	/** @param Change[] $changes */
 	public function plan( array $changes ): PurgePlan {
-		$urls = array();
-		$tags = array();
+		$urls    = array();
+		$tags    = array();
+		$reasons = array();
+		$all     = false;
 		foreach ( $changes as $change ) {
+			$reason = $this->reason( $change );
 			if ( $change->site_wide ) {
-				return PurgePlan::everything();
+				$all            = true;
+				$reasons['*'][] = $reason;
+				continue;
 			}
 			if ( $this->tagger ) {
 				foreach ( ( $this->tagger )( $change ) as $tag ) {
@@ -49,11 +54,31 @@ final class Planner {
 			foreach ( array_merge( $change->urls, $this->expander->expand( $change ) ) as $url ) {
 				$clean = $this->normalise( (string) $url );
 				if ( null !== $clean && ( $explicit || ! $this->excluded( $clean ) ) ) {
-					$urls[ $clean ] = true;
+					$urls[ $clean ]      = true;
+					$reasons[ $clean ][] = $reason;
 				}
 			}
 		}
-		return PurgePlan::forUrls( array_keys( $urls ), array_keys( $tags ) );
+		$plan          = $all ? PurgePlan::everything() : PurgePlan::forUrls( array_keys( $urls ), array_keys( $tags ) );
+		$plan->reasons = array_map( static fn( $items ) => array_values( array_unique( $items ) ), $reasons );
+		return $plan;
+	}
+
+	private function reason( Change $change ): string {
+		$label = $change->type;
+		if ( isset( $change->context['post_id'] ) ) {
+			$label .= ' #' . (int) $change->context['post_id'];
+		} elseif ( isset( $change->context['term_id'] ) ) {
+			$label .= ' #' . (int) $change->context['term_id'];
+		}
+		if ( ! empty( $change->context['snapshot'] ) ) {
+			$label .= ' (previous URL or archive)';
+		} elseif ( 'dependency' === $change->type ) {
+			$label .= ' (shared content or Query Loop dependency)';
+		} else {
+			$label .= ' (changed content or related archive)';
+		}
+		return $label;
 	}
 
 	/**

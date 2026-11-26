@@ -20,6 +20,7 @@ final class Rule {
 
 	/** Change types a rule can listen for, with a label for the UI. */
 	public const TRIGGERS = array(
+		'dependency'                => 'A shared block, template or Query Loop dependency changes',
 		'post'                      => 'A post or page is published, updated or unpublished',
 		'post_slug'                 => 'A published post changes its URL',
 		'term'                      => 'A category, tag or other term changes',

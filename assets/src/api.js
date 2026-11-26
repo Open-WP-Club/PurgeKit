@@ -57,3 +57,5 @@ export const getLayerStats = ( days = 30 ) => apiFetch( { path: `${ NS }/layers/
 export const getImpact = ( days = 30 ) => apiFetch( { path: `${ NS }/impact?days=${ days }` } );
 export const replayFlush = ( id ) => apiFetch( { path: `${ NS }/history/${ id }/replay`, method: 'POST' } );
 export const bumpAssets = () => apiFetch( { path: `${ NS }/assets/bump`, method: 'POST' } );
+
+export const inspectVariants = ( variants ) => apiFetch( { path: `${ NS }/inspect/variants`, method: 'POST', data: { variants } } );

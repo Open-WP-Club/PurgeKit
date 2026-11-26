@@ -4,7 +4,7 @@ One control centre for every cache layer on a WordPress site. PurgeKit notices w
 
 Free and open source (GPL-2.0-or-later). No paid tier, no telemetry.
 
-> **Status:** v0.1 (core). Written and unit-tested; the integration tests and the admin UI still need a run on a real WordPress.
+> **Validation:** PHP unit tests, WordPress integration tests in wp-env, and automated React component tests. Configured third-party cache services still need verification against their real infrastructure.
 
 ## Requirements
 
@@ -114,6 +114,31 @@ curl -X POST https://example.com/wp-json/purgekit/v1/webhook/flush \
 ## Architecture
 
 REST-first. `src/Core` is plain PHP with no WordPress calls (Change → Queue → Planner → Executor → Flusher) behind small interfaces (`Store`, `Http`, `Lock`, `Clock`), so it is unit-tested with fakes. WordPress-specific code lives in adapters (`src/Wp`, `src/Detect`, `src/Rest`, `src/Cli`, `src/Admin`). The React app in `assets/src` only talks to `/wp-json/purgekit/v1`.
+
+## Change batching, dependencies and warming
+
+Automatic mode collects changes for **20 quiet seconds**, with a **300-second maximum** from the first queued change. Both values are configurable in Settings → General (`batch_delay`: 0–120; `batch_maximum`: 30–3600, never less than the quiet window). Set the quiet time to 0 for immediate flushing. WordPress cron runs background work when it gets an opportunity; the maximum bounds the collection window, not cron delivery time. Manual purges stay immediate.
+
+Imports using WordPress `import_start` / `import_end` are grouped until they finish or reach the maximum wait. Custom importers can use `do_action( 'purgekit_batch_begin' )` and `do_action( 'purgekit_batch_end' )`. An unfinished import hold expires at the maximum wait.
+
+Before editing or deleting published content, PurgeKit captures its old URLs and tags. Old and new category, author, date and permalink dependencies are invalidated together. Direct taxonomy assignments and removals are detected too.
+
+Shared content dependencies include nested synced blocks, template parts, Query Loops by post type, Elementor `template_id` data and `[elementor-template id="…"]` shortcodes, and Beaver Builder `node_template_id` data. Global theme templates, Divi library layouts and Elementor templates with display conditions use a full purge. The dependency scan is bounded to 500 candidate records; overflow also uses a full purge. This is conservative dependency detection, not a complete parser for every builder's display rules.
+
+Preview and History explain which change selected each URL, including old dependencies and matching rules. History also keeps the selected layers and rule delays. Reasons are limited to 50 targets and ten causes per target in the interface and stored history; old history remains readable.
+
+Warming retries network failures, HTTP 408/429 and server errors up to **three times**, after 15, 30 and 60 seconds. HTTP 429/503 pauses the queue and honours `Retry-After` (up to one hour). Permanent errors are counted as failed. Settings → General accepts up to 50 priority warming URLs: they go first when affected, and full purges include them. Requests stay on this site's origin and do not follow redirects. Dashboard shows pending, successful and failed requests plus retry counts for the current cycle. `wp purgekit warm` processes ready work and schedules delayed retries in the background.
+
+## Comparing cache variants
+
+Inspector → **Compare cache variants** compares up to four anonymous URL/device/language combinations. Choose desktop or mobile, optionally set an `Accept-Language` code, and enter translated paths or URLs with query parameters. Each variant gets its own cached-versus-cache-busted content check and cacheability report. Cookies are never supplied, and response cookie values are never included in reports. A cache-busted response is a comparison sample, not proof that every upstream cache was bypassed; dynamic content can also differ.
+
+The authenticated `POST /wp-json/purgekit/v1/inspect/variants` route accepts:
+
+```json
+{"variants":[{"url":"https://example.com/bg/?currency=BGN","device":"mobile","language":"bg-BG"},{"url":"https://example.com/en/?currency=EUR","device":"desktop","language":"en"}]}
+```
+
 
 ## Development
 

@@ -86,7 +86,9 @@ export default function Dashboard( { goTo = () => {} } ) {
 	const load = () => getStatus().then( ( s ) => { setStatus( s ); setLoadError( '' ); } ).catch( ( e ) => setLoadError( e.message ) );
 	useEffect( () => {
 		load();
+		const timer = setInterval( load, 10000 );
 		getLayers().then( ( ls ) => setLabels( Object.fromEntries( ls.map( ( l ) => [ l.id, l.label ] ) ) ) ).catch( () => {} );
+		return () => clearInterval( timer );
 	}, [] );
 
 	const run = async () => {
@@ -203,6 +205,12 @@ export default function Dashboard( { goTo = () => {} } ) {
 				</Tile>
 			</div>
 
+			{ status.warming && <section className="purgekit-card" aria-live="polite">
+				<h2>{ __( 'Cache warming', 'purgekit' ) }</h2>
+				<p>{ sprintf( /* translators: 1: pending URLs, 2: successful URLs, 3: failed URLs, 4: retries */ __( '%1$d waiting · %2$d successful · %3$d failed · %4$d retries', 'purgekit' ), status.warming.pending, status.warming.successful, status.warming.failed, status.warming.retries ) }</p>
+				{ status.warming.pending > 0 && <p>{ __( 'Next batch', 'purgekit' ) }: { new Date( status.warming.next_at * 1000 ).toLocaleString() }</p> }
+				{ status.auto_due && <p>{ __( 'Automatic purge scheduled for', 'purgekit' ) }: { new Date( status.auto_due * 1000 ).toLocaleString() }</p> }
+			</section> }
 			<section className="purgekit-card">
 				<h2>{ __( 'Flush', 'purgekit' ) }</h2>
 				<p>{ __( 'See what the queued changes would purge first. Purging everything asks for a confirmation.', 'purgekit' ) }</p>

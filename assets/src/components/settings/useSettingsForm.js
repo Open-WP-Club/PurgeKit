@@ -16,6 +16,7 @@ const INHERITABLE = [ 'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled' ];
 
 // Everything the form edits. Only what changed is sent: on multisite, saving a key makes the site stop inheriting the network default.
 const KEYS = [
+	'batch_delay', 'batch_maximum', 'warm_priority_urls',
 	'mode', 'schedule', 'skip_if_unchanged', 'warm_enabled', 'warm_sitemap_limit', 'verify_after_flush', 'cloudflare_zone',
 	'varnish_enabled', 'opcache_enabled', 'apcu_enabled', 'transients_enabled', 'builder_assets_enabled', 'nginx_cache_path',
 	'nginx_cache_key', 'nginx_cache_levels', 'alert_email', 'alert_on', 'allow_external', 'exclude_paths', 'storm_pause',

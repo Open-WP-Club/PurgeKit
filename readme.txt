@@ -4,7 +4,7 @@ Tags: cache, purge cache, clear cache, cloudflare, varnish
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 8.2
-Stable tag: 0.3.1
+Stable tag: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -22,7 +22,12 @@ PurgeKit notices when your site changes, then clears every cache layer it finds,
 * Three modes: notify me, flush automatically, or scheduled flush (every hour up to weekly, optionally skipping when nothing changed).
 * Purges only the pages that changed: the post, home page, its categories and tags, author and date archives and the feed. Menus, theme and settings changes purge everything.
 * Purges layers inside to outside: object cache, cache plugin, host cache, Varnish, then CDN.
-* Warms the cache in the background after a purge.
+* Warms the cache in the background after a purge, with priority URLs, bounded retries, overload backoff and visible progress.
+* Batches automatic changes over a configurable quiet window, with a maximum wait and importer hooks.
+* Preserves old URL, category, author and date dependencies when content is changed or deleted.
+* Detects dependencies from synced blocks, Query Loops and supported builder template references; global templates use a full purge.
+* Explains selected URLs, matching rules and layers in Preview and History.
+* Compares anonymous desktop/mobile, language and query-string cache variants in Inspector.
 * History of every flush with the result of each layer.
 * WP-CLI: `wp purgekit flush|status|layers|scan|warm`.
 * Deploy webhook with a secret key, for GitHub Actions or any deploy script.
@@ -81,7 +86,7 @@ Varnish purge requests and cache warming only go to your own site and server.
 
 == Changelog ==
 
-= 0.3.1 =
+= 0.4.0 =
 * Changed: the Compare tab is a dashboard: totals at the top, and only layers that are running and have purges or figures to show are listed.
 * Fix: Health no longer calls a switched-off WP-Cron a problem while scheduled jobs still run (for example from a server cron job). It checks that PurgeKit's hourly job ran in the last three hours.
 * Fix: the site check no longer sets suppress_filters in its post query (Plugin Check).

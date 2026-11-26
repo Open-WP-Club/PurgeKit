@@ -31,14 +31,14 @@ final class Plugin {
 	public static function init(): void {
 		$s = self::services();
 		self::migrate( $s );
-		( new Hooks( $s->queue ) )->register();
+		( new Hooks( $s->queue, $s->expander, new \PurgeKit\Detect\Dependencies() ) )->register();
 		$s->cron->register();
 		add_action(
 			'purgekit_warm',
 			static function () use ( $s ) {
 				$s->warmer->processBatch();
 				if ( $s->warmer->pending() > 0 && ! wp_next_scheduled( 'purgekit_warm' ) ) {
-					wp_schedule_single_event( time() + 5, 'purgekit_warm' );
+					wp_schedule_single_event( $s->warmer->nextAt(), 'purgekit_warm' );
 				}
 			}
 		);
@@ -54,20 +54,8 @@ final class Plugin {
 		( new Menu() )->register();
 		( new AdminBar( $s ) )->register();
 
-		if ( 'auto' === $s->settings->mode() ) {
-			add_action(
-				'shutdown',
-				static function () use ( $s ) {
-					// During a flush storm (when the user asked for it) changes stay queued, as in "notify me".
-					if ( $s->settings->stormPause() && null !== $s->storm->tripped( time() ) ) {
-						return;
-					}
-					if ( $s->queue->count() > 0 ) {
-						$s->flusher->flush( 'auto' );
-					}
-				}
-			);
-		}
+		( new Wp\AutoRunner( $s ) )->register();
+
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			\WP_CLI::add_command( 'purgekit', new Cli\Command( $s ) );
 		}
@@ -181,7 +169,7 @@ final class Plugin {
 	}
 
 	private static function clear_cron(): void {
-		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE, Wp\Cron::SAMPLE, Wp\Cron::DIGEST ) as $hook ) {
+		foreach ( array( Wp\Cron::FLUSH, Wp\Cron::SCAN, Wp\Cron::PRUNE, Wp\Cron::SAMPLE, Wp\Cron::DIGEST, Wp\AutoRunner::HOOK, 'purgekit_warm' ) as $hook ) {
 			wp_clear_scheduled_hook( $hook );
 		}
 	}

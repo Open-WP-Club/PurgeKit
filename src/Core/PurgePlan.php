@@ -3,7 +3,7 @@ namespace PurgeKit\Core;
 
 final class PurgePlan {
 	/** @param string[] $tags Cache tags (surrogate keys). Layers that cannot purge by tag use the URLs. */
-	public function __construct( public bool $all, public array $urls = array(), public array $tags = array() ) {}
+	public function __construct( public bool $all, public array $urls = array(), public array $tags = array(), public array $reasons = array() ) {}
 
 	public static function everything(): self {
 		return new self( true );

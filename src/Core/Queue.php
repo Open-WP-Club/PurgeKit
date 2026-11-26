@@ -14,6 +14,11 @@ final class Queue {
 			'site_wide' => $change->site_wide,
 			'context'   => $change->context,
 		);
+		$now   = time();
+		if ( ! $items || (int) $this->store->get( 'queue_first_at', 0 ) <= 0 ) {
+			$this->store->set( 'queue_first_at', $now );
+		}
+		$this->store->set( 'queue_last_at', $now );
 		foreach ( $items as $existing ) {
 			if ( $existing['site_wide'] === $row['site_wide'] && $existing['urls'] === $row['urls'] && $existing['type'] === $row['type'] && ( $existing['context'] ?? array() ) == $row['context'] ) { // phpcs:ignore Universal.Operators.StrictComparisons.LooseEqual -- array order is irrelevant here.
 				return;
@@ -35,6 +40,8 @@ final class Queue {
 	public function drain( bool $escalate = true ): array {
 		$changes = $this->peek( $escalate );
 		$this->store->delete( self::KEY );
+		$this->store->delete( 'queue_first_at' );
+		$this->store->delete( 'queue_last_at' );
 		return $changes;
 	}
 

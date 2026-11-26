@@ -7,6 +7,9 @@ use PurgeKit\Core\UrlExpander;
 /** Expands a post/term change into the archive URLs it affects. */
 final class PostUrlExpander implements UrlExpander {
 	public function expand( Change $change ): array {
+		if ( ! empty( $change->context['snapshot'] ) || 'dependency' === $change->type ) {
+			return array();
+		}
 		$urls = array();
 		if ( isset( $change->context['post_id'] ) ) {
 			$urls = $this->post_urls( (int) $change->context['post_id'] );
@@ -24,6 +27,9 @@ final class PostUrlExpander implements UrlExpander {
 	 * @return string[]
 	 */
 	public function tags( Change $change ): array {
+		if ( ! empty( $change->context['snapshot'] ) ) {
+			return (array) ( $change->context['tags'] ?? array() );
+		}
 		$tags = array();
 		if ( isset( $change->context['post_id'] ) ) {
 			$post = get_post( (int) $change->context['post_id'] );

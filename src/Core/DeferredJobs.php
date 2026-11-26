@@ -25,13 +25,14 @@ final class DeferredJobs {
 			return null;
 		}
 		$item    = array(
-			'id'     => bin2hex( random_bytes( 4 ) ),
-			'at'     => $at,
-			'all'    => $plan->all,
-			'urls'   => array_slice( array_map( 'strval', $plan->urls ), 0, 500 ),
-			'tags'   => array_slice( array_map( 'strval', $plan->tags ), 0, 100 ),
-			'layers' => $layers,
-			'rules'  => $rules,
+			'id'      => bin2hex( random_bytes( 4 ) ),
+			'at'      => $at,
+			'all'     => $plan->all,
+			'urls'    => array_slice( array_map( 'strval', $plan->urls ), 0, 500 ),
+			'tags'    => array_slice( array_map( 'strval', $plan->tags ), 0, 100 ),
+			'layers'  => $layers,
+			'rules'   => $rules,
+			'reasons' => array_slice( $plan->reasons, 0, 50, true ),
 		);
 		$items[] = $item;
 		$this->store->set( self::KEY, $items );

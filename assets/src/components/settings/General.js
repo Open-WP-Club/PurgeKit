@@ -1,4 +1,4 @@
-import { SelectControl, TextControl } from '@wordpress/components';
+import { SelectControl, TextControl, TextareaControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { Choice, Group, Setting, ToggleSetting } from '../../ui';
 
@@ -24,6 +24,12 @@ export default function General( { form } ) {
 			<Group title={ __( 'When something changes', 'purgekit' ) }>
 				<Choice legend={ __( 'When something changes', 'purgekit' ) } value={ s.mode } options={ MODES } onChange={ set( 'mode' ) } disabled={ locked( 'mode' ) } />
 				{ resetLink( 'mode' ) }
+				{ s.mode === 'auto' && <>
+					<TextControl __nextHasNoMarginBottom __next40pxDefaultSize type="number" min={ 0 } max={ 120 } label={ __( 'Collect changes for this many quiet seconds', 'purgekit' ) } help={ __( '0 flushes immediately. Background work runs through WordPress cron.', 'purgekit' ) } value={ s.batch_delay ?? 20 } disabled={ locked( 'batch_delay' ) } onChange={ ( v ) => set( 'batch_delay' )( Number( v ) || 0 ) } />
+					{ resetLink( 'batch_delay' ) }
+					<TextControl __nextHasNoMarginBottom __next40pxDefaultSize type="number" min={ 30 } max={ 3600 } label={ __( 'Maximum collection time in seconds', 'purgekit' ) } value={ s.batch_maximum ?? 300 } disabled={ locked( 'batch_maximum' ) } onChange={ ( v ) => set( 'batch_maximum' )( Number( v ) || 30 ) } />
+					{ resetLink( 'batch_maximum' ) }
+				</> }
 				{ s.mode === 'scheduled' && (
 					<>
 						<Setting id="pk-schedule" label={ __( 'Schedule', 'purgekit' ) } locked={ locked( 'schedule' ) }>
@@ -38,6 +44,8 @@ export default function General( { form } ) {
 			<Group title={ __( 'After a purge', 'purgekit' ) }>
 				<ToggleSetting id="pk-warm" label={ __( 'Warm the cache after a purge', 'purgekit' ) } help={ __( 'Visits the purged pages in the background so the first real visitor gets a cached page.', 'purgekit' ) } checked={ s.warm_enabled } onChange={ set( 'warm_enabled' ) } locked={ locked( 'warm_enabled' ) } />
 				{ resetLink( 'warm_enabled' ) }
+				<TextareaControl __nextHasNoMarginBottom label={ __( 'Priority warming URLs', 'purgekit' ) } help={ __( 'One URL on this site per line. These pages are warmed first when included in the purge; full purges also include them. Temporary failures retry up to three times, with a pause on HTTP 429 or 503.', 'purgekit' ) } value={ ( s.warm_priority_urls || [] ).join( '\n' ) } disabled={ locked( 'warm_priority_urls' ) } onChange={ ( v ) => set( 'warm_priority_urls' )( v.split( /\r?\n/ ) ) } />
+				{ resetLink( 'warm_priority_urls' ) }
 				<Setting id="pk-warm-limit" label={ __( 'Warm this many sitemap pages after purging everything', 'purgekit' ) } help={ __( 'Taken from wp-sitemap.xml, own pages only. 0 turns it off, 100 is the maximum.', 'purgekit' ) } locked={ locked( 'warm_sitemap_limit' ) }>
 					<TextControl
 						id="pk-warm-limit"

@@ -2,6 +2,7 @@ import { useState } from '@wordpress/element';
 import { Button, Notice } from '@wordpress/components';
 import { __, sprintf } from '@wordpress/i18n';
 import { previewFlush } from '../api';
+import Reasons from './Reasons';
 
 /** Dry run: shows what the next queued flush would do. Nothing is purged and the queue is not touched. */
 export default function Preview( { extra = null } ) {
@@ -73,6 +74,8 @@ function PreviewResult( { data } ) {
 							{ job.delay > 0 && ' — ' + sprintf( /* translators: %d: seconds */ __( 'after %d s', 'purgekit' ), job.delay ) }
 							{ job.when === 'on_failure' && ' — ' + __( 'only if an earlier step failed', 'purgekit' ) }
 							{ job.tags > 0 && ' — ' + sprintf( /* translators: %d: number of cache tags */ __( '%d cache tags', 'purgekit' ), job.tags ) }
+							<Reasons reasons={ job.reasons } />
+							{ job.layers.filter( ( l ) => l.skipped ).map( ( l ) => <p key={ l.id }>{ l.label }: { l.skipped }</p> ) }
 							{ ! job.all && job.urls.length > 0 && (
 								<ul>
 									{ job.urls.map( ( u ) => (

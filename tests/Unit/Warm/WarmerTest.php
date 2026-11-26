@@ -35,13 +35,14 @@ final class WarmerTest extends TestCase {
 		$this->assertCount( 5, $http->requests );
 	}
 
-	public function test_failed_url_is_dropped_not_retried(): void {
+	public function test_failed_url_stays_queued_for_retry(): void {
 		$http = new FakeHttp();
 		$http->queue( new HttpException( 'timeout' ) );
 		$w = $this->warmer( $http );
 		$w->enqueue( PurgePlan::forUrls( array( 'https://site.test/a', 'https://site.test/b' ) ) );
 		$this->assertSame( 2, $w->processBatch() );
-		$this->assertSame( 0, $w->pending() );
+		$this->assertSame( 1, $w->pending() );
+		$this->assertSame( 1, $w->progress()['retries'] );
 	}
 
 	public function test_all_plan_warms_home_and_extra_urls(): void {

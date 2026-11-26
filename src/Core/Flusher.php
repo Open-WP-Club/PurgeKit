@@ -42,7 +42,7 @@ final class Flusher {
 			function () use ( $force ): array {
 				$set     = $this->rules ? $this->rules->load() : null;
 				$routed  = $set && ! $set->isEmpty();
-				$changes = $this->queue->drain( ! $routed );
+				$changes = $this->queue->drain( false );
 				$built   = $this->resolve( $changes, $routed ? $set : null, $force );
 				return array( $built['plan'], $changes ) + ( null !== $built['jobs'] ? array( 2 => $built['jobs'] ) : array() );
 			}
@@ -57,7 +57,7 @@ final class Flusher {
 	public function preview( bool $force = false ): array {
 		$set     = $this->rules ? $this->rules->load() : null;
 		$routed  = $set && ! $set->isEmpty();
-		$changes = $this->queue->peek( ! $routed );
+		$changes = $this->queue->peek( false );
 		$built   = $this->resolve( $changes, $routed ? $set : null, $force );
 		$plan    = $built['plan'];
 
@@ -145,6 +145,7 @@ final class Flusher {
 			'urls'       => array_slice( $plan->urls, 0, self::PREVIEW_URL_CAP ),
 			'urls_total' => count( $plan->urls ),
 			'layers'     => $this->executor->layersFor( $layers ),
+			'reasons'    => array_map( static fn( $why ) => array_slice( $why, 0, 10 ), array_slice( $plan->reasons, 0, self::PREVIEW_URL_CAP, true ) ),
 		);
 	}
 
@@ -190,7 +191,8 @@ final class Flusher {
 
 	/** Runs a job a rule had postponed. Called by the WordPress cron event. */
 	public function runDeferred( array $job ): Run {
-		$plan = $job['all'] ? PurgePlan::everything() : PurgePlan::forUrls( (array) $job['urls'], (array) ( $job['tags'] ?? array() ) );
+		$plan          = $job['all'] ? PurgePlan::everything() : PurgePlan::forUrls( (array) $job['urls'], (array) ( $job['tags'] ?? array() ) );
+		$plan->reasons = (array) ( $job['reasons'] ?? array() );
 		return $this->guarded(
 			'delayed',
 			static fn(): array => array(
@@ -225,11 +227,14 @@ final class Flusher {
 		$id  = 0;
 		$run = new Run( Run::SKIPPED );
 		try {
-			$built   = $build();
-			$plan    = $built[0];
-			$changes = $built[1];
-			$run     = isset( $built[2] ) ? $this->runJobs( $built[2], $plan ) : $this->executor->run( $plan );
-			$id      = $this->history->record( $source, $run, $changes );
+			$built     = $build();
+			$plan      = $built[0];
+			$changes   = $built[1];
+			$run       = isset( $built[2] ) ? $this->runJobs( $built[2], $plan ) : $this->executor->run( $plan );
+			$run->jobs = isset( $built[2] )
+				? array_map( fn( $job ) => $this->describe( $job['plan'], $job['layers'] ?? null, $job['rules'] ?? array(), (int) ( $job['delay'] ?? 0 ), (string) ( $job['when'] ?? Rule::ALWAYS ) ), array_slice( $built[2], 0, 50 ) )
+				: array( $this->describe( $plan, null, array() ) );
+			$id        = $this->history->record( $source, $run, $changes );
 			if ( $this->finished ) {
 				try {
 					( $this->finished )( $source, $run );
@@ -307,14 +312,20 @@ final class Flusher {
 
 	/** @param array<int,array{plan:PurgePlan,layers:?array}> $jobs */
 	private function merge( array $jobs ): PurgePlan {
-		$all  = false;
-		$urls = array();
-		$tags = array();
+		$all     = false;
+		$urls    = array();
+		$tags    = array();
+		$reasons = array();
 		foreach ( $jobs as $job ) {
+			foreach ( $job['plan']->reasons as $url => $why ) {
+				$reasons[ $url ] = array_values( array_unique( array_merge( $reasons[ $url ] ?? array(), $why ) ) );
+			}
 			$all  = $all || $job['plan']->all;
 			$urls = array_merge( $urls, $job['plan']->urls );
 			$tags = array_merge( $tags, $job['plan']->tags );
 		}
-		return $all ? PurgePlan::everything() : PurgePlan::forUrls( array_values( array_unique( $urls ) ), array_values( array_unique( $tags ) ) );
+		$plan          = $all ? PurgePlan::everything() : PurgePlan::forUrls( array_values( array_unique( $urls ) ), array_values( array_unique( $tags ) ) );
+		$plan->reasons = $reasons;
+		return $plan;
 	}
 }

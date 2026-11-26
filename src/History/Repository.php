@@ -77,6 +77,12 @@ final class Repository implements HistoryWriter {
 	 */
 	private function trigger( Run $run, array $changes ): array {
 		$out = array();
+		if ( $run->plan && $run->plan->reasons ) {
+			$out['reasons'] = array_map( static fn( $why ) => array_slice( $why, 0, 10 ), array_slice( $run->plan->reasons, 0, 50, true ) );
+		}
+		if ( $run->jobs ) {
+			$out['jobs'] = $run->jobs;
+		}
 		$uid = function_exists( 'get_current_user_id' ) ? get_current_user_id() : 0;
 		if ( $uid > 0 ) {
 			$user = get_userdata( $uid );

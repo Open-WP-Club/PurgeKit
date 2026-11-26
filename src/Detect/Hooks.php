@@ -6,9 +6,20 @@ use PurgeKit\Core\Queue;
 
 /** Turns WordPress events into queued Changes. */
 final class Hooks {
-	public function __construct( private Queue $queue ) {}
+	public function __construct( private Queue $queue, private ?PostUrlExpander $expander = null, private ?Dependencies $dependencies = null ) {}
 
 	public function register(): void {
+		add_action( 'pre_post_update', array( $this, 'before_post' ) );
+		add_action( 'before_delete_post', array( $this, 'before_post' ) );
+		add_action( 'edit_terms', array( $this, 'before_term' ), 10, 2 );
+		add_action( 'pre_delete_term', array( $this, 'before_term' ), 10, 2 );
+		add_action( 'delete_term_relationships', array( $this, 'before_post' ) );
+		add_filter( 'update_post_metadata', array( $this, 'before_builder_meta' ), 10, 3 );
+		add_filter( 'delete_post_metadata', array( $this, 'before_builder_meta' ), 10, 3 );
+		add_action( 'added_post_meta', array( $this, 'on_builder_meta' ), 10, 3 );
+		add_action( 'updated_post_meta', array( $this, 'on_builder_meta' ), 10, 3 );
+		add_action( 'set_object_terms', array( $this, 'on_relationships' ) );
+		add_action( 'wp_after_insert_post', array( $this, 'after_post' ), 20 );
 		add_action( 'transition_post_status', array( $this, 'on_post_status' ), 10, 3 );
 		add_action( 'post_updated', array( $this, 'on_post_updated' ), 10, 3 );
 		foreach ( array( 'created_term', 'edited_term', 'delete_term' ) as $hook ) {
@@ -24,6 +35,106 @@ final class Hooks {
 		add_action( 'woocommerce_scheduled_sales', array( $this, 'sales_end' ), 999 );
 		foreach ( array( 'wp_create_nav_menu', 'wp_update_nav_menu', 'wp_update_nav_menu_item', 'wp_delete_nav_menu', 'customize_save_after', 'switch_theme', 'activated_plugin', 'deactivated_plugin', 'upgrader_process_complete' ) as $hook ) {
 			add_action( $hook, array( $this, 'on_site_wide' ) );
+		}
+	}
+
+	/** Capture URLs and tags while the old author, date, slug and terms are still available. */
+	public function before_post( int $post_id ): void {
+		$this->after_post( $post_id );
+		$post = get_post( $post_id );
+		if ( ! $this->expander || ! $post || 'publish' !== $post->post_status || $this->ignored( $post ) ) {
+			return;
+		}
+		$c = Change::forUrls(
+			'post',
+			array(),
+			array(
+				'post_id'   => $post_id,
+				'post_type' => $post->post_type,
+			)
+		);
+		$this->queue->add(
+			Change::forUrls(
+				'post',
+				$this->expander->expand( $c ),
+				$c->context + array(
+					'snapshot' => true,
+					'tags'     => $this->expander->tags( $c ),
+				)
+			)
+		);
+	}
+
+	public function before_builder_meta( mixed $check, int $post_id, string $key ): mixed {
+		if ( null === $check ) {
+			$this->on_builder_meta( 1, $post_id, $key );
+		}
+		return $check;
+	}
+
+	public function on_builder_meta( int $meta_id, int $post_id, string $key ): void {
+		if ( $meta_id > 0 && in_array( $key, array( '_elementor_data', '_fl_builder_data', '_elementor_conditions' ), true ) ) {
+			$this->on_relationships( $post_id );
+			$this->after_post( $post_id );
+		}
+	}
+
+	public function on_relationships( int $post_id ): void {
+		$post = get_post( $post_id );
+		if ( $post && 'publish' === $post->post_status && ! $this->ignored( $post ) ) {
+			$this->queue->add(
+				Change::forUrls(
+					'post',
+					array(),
+					array(
+						'post_id'   => $post_id,
+						'post_type' => $post->post_type,
+					)
+				)
+			);
+			$this->after_post( $post_id );
+		}
+	}
+
+	public function before_term( int $term_id, string $taxonomy ): void {
+		if ( ! $this->expander ) {
+			return;
+		}
+		$c = Change::forUrls(
+			'term',
+			array(),
+			array(
+				'term_id'  => $term_id,
+				'taxonomy' => $taxonomy,
+			)
+		);
+		$this->queue->add(
+			Change::forUrls(
+				'term',
+				$this->expander->expand( $c ),
+				$c->context + array(
+					'snapshot' => true,
+					'tags'     => $this->expander->tags( $c ),
+				)
+			)
+		);
+	}
+
+	public function after_post( int $post_id ): void {
+		$post = get_post( $post_id );
+		if ( ! $this->dependencies || ! $post || 'publish' !== $post->post_status || ( ! in_array( $post->post_type, array( 'wp_block', 'wp_template', 'wp_template_part', 'elementor_library', 'et_pb_layout', 'fl-builder-template' ), true ) && $this->ignored( $post ) ) || wp_is_post_revision( $post ) || wp_is_post_autosave( $post ) ) {
+			return;
+		}
+		$d       = $this->dependencies->affected( $post );
+		$context = array(
+			'post_id'    => $post_id,
+			'post_type'  => $post->post_type,
+			'dependency' => true,
+		);
+		if ( $d['all'] ) {
+			$this->queue->add( Change::siteWide( 'dependency', $context ) );
+		} elseif ( $d['urls'] ) {
+			$this->queue->add( Change::forUrls( 'dependency', $d['urls'], $context ) );
 		}
 	}
 

@@ -3,6 +3,7 @@ import { Button, Notice, TextControl } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import { checkCacheability, inspectUrl, purgeLayerUrl } from '../api';
 import CacheReport from './CacheReport';
+import VariantInspector from './VariantInspector';
 
 const NOTICE = { ok: 'success', stale: 'warning', different: 'info', error: 'error' };
 
@@ -67,6 +68,7 @@ export default function Inspector() {
 			<Button variant="secondary" isBusy={ whyBusy } disabled={ busy || whyBusy || url === '' } onClick={ why }>
 				{ __( 'Why isn’t it cached?', 'purgekit' ) }
 			</Button>
+			<VariantInspector url={ url } disabled={ busy || whyBusy } />
 			{ report && <CacheReport report={ report } /> }
 			{ error && <Notice status="error" isDismissible={ false }>{ error }</Notice> }
 			{ result && (

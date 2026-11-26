@@ -7,6 +7,15 @@ final class InspectController extends AbstractController {
 	public function register(): void {
 		register_rest_route(
 			self::NS,
+			'/inspect/variants',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'variants' ),
+				'permission_callback' => array( $this, 'can' ),
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/inspect',
 			array(
 				'methods'             => 'POST',
@@ -32,6 +41,46 @@ final class InspectController extends AbstractController {
 				'permission_callback' => array( $this, 'can' ),
 			)
 		);
+	}
+
+	/** Compare up to four explicitly selected URL/device/language combinations. */
+	public function variants( \WP_REST_Request $req ): array|\WP_Error {
+		$items = $req->get_param( 'variants' );
+		if ( ! is_array( $items ) || ! $items || count( $items ) > 4 ) {
+			return new \WP_Error( 'purgekit_variants', 'Choose between one and four variants.', array( 'status' => 400 ) );
+		}
+		$validated = array();
+		foreach ( $items as $item ) {
+			if ( ! is_array( $item ) || ! is_string( $item['url'] ?? null ) || ! is_string( $item['device'] ?? null ) || ! is_string( $item['language'] ?? null ) ) {
+				return new \WP_Error( 'purgekit_variants', 'Each variant needs a URL, device and language.', array( 'status' => 400 ) );
+			}
+			$url = $this->own_url( $item['url'] );
+			if ( null === $url ) {
+				return new \WP_Error( 'purgekit_bad_url', 'Enter a URL on this site.', array( 'status' => 400 ) );
+			}
+			try {
+				$headers = \PurgeKit\Inspector\Variants::headers( $item['device'], $item['language'] );
+			} catch ( \InvalidArgumentException $e ) {
+				return new \WP_Error( 'purgekit_variants', $e->getMessage(), array( 'status' => 400 ) );
+			}
+			$validated[] = array(
+				'url'      => $url,
+				'device'   => $item['device'],
+				'language' => $item['language'],
+				'headers'  => $headers,
+			);
+		}
+		$out = array();
+		foreach ( $validated as $v ) {
+			$out[] = array(
+				'url'          => $v['url'],
+				'device'       => $v['device'],
+				'language'     => $v['language'],
+				'inspection'   => $this->services->inspector->inspect( $v['url'], $v['headers'] ),
+				'cacheability' => $this->services->cacheability->check( $v['url'], $v['headers'] ),
+			);
+		}
+		return array( 'variants' => $out );
 	}
 
 	public function inspect( \WP_REST_Request $req ): array|\WP_Error {
@@ -87,6 +136,9 @@ final class InspectController extends AbstractController {
 		if ( 0 !== strcasecmp( $parts['host'], $home['host'] ) ) {
 			return null;
 		}
-		return $url;
+		if ( ( $parts['scheme'] ?? '' ) !== ( $home['scheme'] ?? '' ) || ( $parts['port'] ?? null ) !== ( $home['port'] ?? null ) ) {
+			return null;
+		}
+		return explode( '#', $url, 2 )[0];
 	}
 }

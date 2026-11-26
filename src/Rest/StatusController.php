@@ -48,6 +48,8 @@ final class StatusController extends AbstractController {
 		}
 		$storm = $s->storm->tripped( time() );
 		return array(
+			'warming'        => $s->warmer->progress(),
+			'auto_due'       => wp_next_scheduled( \PurgeKit\Wp\AutoRunner::HOOK ),
 			'pending'        => $s->queue->count(),
 			'mode'           => $s->settings->mode(),
 			'schedule'       => $s->settings->schedule(),

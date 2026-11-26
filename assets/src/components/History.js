@@ -4,6 +4,8 @@ import { __, sprintf } from '@wordpress/i18n';
 import { getHistory, getLayers, replayFlush, retryFlush } from '../api';
 import { ago, Badge, Live, sourceLabel, StatusBadge, toDate, triggerParts, useMessage } from '../ui';
 
+import Reasons from './Reasons';
+
 const STATUSES = [
 	{ value: '', label: __( 'All', 'purgekit' ) },
 	{ value: 'ok', label: __( 'OK', 'purgekit' ) },
@@ -98,6 +100,17 @@ function Row( { row, busy, onReplay, onRetry, count = 1, oldest } ) {
 						<span className="purgekit-layer__msg">{ r.message }</span>
 					</div>
 				) ) }
+				<Reasons reasons={ row.trigger?.reasons } />
+				{ row.trigger?.jobs?.length > 0 && <details>
+					<summary>{ __( 'Execution plan', 'purgekit' ) }</summary>
+					{ row.trigger.jobs.map( ( job, i ) => <div key={ i }>
+						<p>{ job.rules.length ? job.rules.join( ', ' ) : __( 'Default route', 'purgekit' ) } → { job.layers.map( ( l ) => l.label ).join( ', ' ) || __( 'No active layer', 'purgekit' ) }</p>
+						{ job.delay > 0 && <p>{ sprintf( /* translators: %d: seconds */ __( 'Delayed by %d seconds', 'purgekit' ), job.delay ) }</p> }
+						{ job.when === 'on_failure' && <p>{ __( 'Only if an earlier step failed', 'purgekit' ) }</p> }
+						<Reasons reasons={ job.reasons } />
+					</div> ) }
+				</details> }
+				{ row.results.filter( ( r ) => r.status === 'skipped' ).map( ( r, i ) => <p key={ `skipped-${ i }` }>{ r.layer }: { r.message }</p> ) }
 				{ row.verification && <VerificationNote v={ row.verification } /> }
 			</div>
 			{ repeatable && (

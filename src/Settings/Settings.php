@@ -9,6 +9,9 @@ final class Settings {
 	/** Every setting that can be exported, imported or fixed in wp-config.php. Secrets and per-site state (home_host) are never in here. */
 	public const CONFIGURABLE = array(
 		'mode',
+		'batch_delay',
+		'batch_maximum',
+		'warm_priority_urls',
 		'schedule',
 		'skip_if_unchanged',
 		'warm_enabled',
@@ -47,6 +50,19 @@ final class Settings {
 	public function mode(): string {
 		$v = $this->store->get( 'mode', 'notify' );
 		return in_array( $v, self::MODES, true ) ? $v : 'notify';
+	}
+
+	public function batchDelay(): int {
+		return max( 0, min( 120, (int) $this->store->get( 'batch_delay', 20 ) ) );
+	}
+
+	public function batchMaximum(): int {
+		return max( $this->batchDelay(), min( 3600, max( 30, (int) $this->store->get( 'batch_maximum', 300 ) ) ) );
+	}
+
+	public function warmPriorityUrls(): array {
+		$v = $this->store->get( 'warm_priority_urls', array() );
+		return is_array( $v ) ? array_values( array_filter( $v, 'is_string' ) ) : array();
 	}
 
 	public function schedule(): string {
@@ -189,6 +205,9 @@ final class Settings {
 
 	public function all(): array {
 		return array(
+			'batch_delay'            => $this->batchDelay(),
+			'batch_maximum'          => $this->batchMaximum(),
+			'warm_priority_urls'     => $this->warmPriorityUrls(),
 			'mode'                   => $this->mode(),
 			'schedule'               => $this->schedule(),
 			'skip_if_unchanged'      => $this->skipIfUnchanged(),
@@ -221,6 +240,18 @@ final class Settings {
 
 	/** Unknown keys and invalid values are ignored. */
 	public function update( array $patch ): void {
+		foreach ( array(
+			'batch_delay'   => array( 0, 120 ),
+			'batch_maximum' => array( 30, 3600 ),
+		) as $key => $bounds ) {
+			if ( isset( $patch[ $key ] ) && is_numeric( $patch[ $key ] ) ) {
+				$this->store->set( $key, max( $bounds[0], min( $bounds[1], (int) $patch[ $key ] ) ) );
+			}
+		}
+		if ( isset( $patch['warm_priority_urls'] ) && is_array( $patch['warm_priority_urls'] ) ) {
+			$this->store->set( 'warm_priority_urls', array_slice( array_values( array_unique( array_filter( $patch['warm_priority_urls'], static fn( $v ) => is_string( $v ) && strlen( $v ) <= 2000 && false !== filter_var( $v, FILTER_VALIDATE_URL ) ) ) ), 0, 50 ) );
+		}
+
 		if ( isset( $patch['mode'] ) && in_array( $patch['mode'], self::MODES, true ) ) {
 			$this->store->set( 'mode', $patch['mode'] );
 		}

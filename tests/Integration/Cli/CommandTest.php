@@ -111,4 +111,18 @@ final class CommandTest extends \WP_UnitTestCase {
 		$this->cmd->scan( array(), array() );
 		$this->assertStringContainsString( 'No file changes', $this->out() );
 	}
+	public function test_warm_schedules_delayed_retries_instead_of_busy_looping(): void {
+		$original = $this->svc->warmer;
+		$store = new \PurgeKit\Tests\Fakes\FakeStore();
+		$store->set( 'warm_pause_until', time() + 60 );
+		$this->svc->warmer = new \PurgeKit\Warm\Warmer( new \PurgeKit\Tests\Fakes\FakeHttp(), $store, home_url( '/' ) );
+		$this->svc->warmer->enqueue( \PurgeKit\Core\PurgePlan::everything() );
+		wp_clear_scheduled_hook( 'purgekit_warm' );
+		$this->cmd->warm( array(), array() );
+		$this->assertSame( 1, $this->svc->warmer->pending() );
+		$this->assertNotFalse( wp_next_scheduled( 'purgekit_warm' ) );
+		$this->assertStringContainsString( 'scheduled in the background', $this->out() );
+		$this->svc->warmer = $original;
+	}
+
 }

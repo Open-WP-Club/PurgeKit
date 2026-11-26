@@ -177,8 +177,16 @@ final class Command {
 	public function warm( array $args, array $assoc_args ): void {
 		$done = 0;
 		while ( $this->services->warmer->pending() > 0 ) {
-			$done += $this->services->warmer->processBatch();
+			$batch = $this->services->warmer->processBatch();
+			$done += $batch;
+			if ( 0 === $batch ) {
+				if ( ! wp_next_scheduled( 'purgekit_warm' ) ) {
+					wp_schedule_single_event( $this->services->warmer->nextAt(), 'purgekit_warm' );
+				}
+				\WP_CLI::warning( 'Remaining warming requests are waiting for retry or another worker; scheduled in the background.' );
+				break;
+			}
 		}
-		\WP_CLI::success( "Warmed $done URLs." );
+		\WP_CLI::success( "Processed $done warming requests." );
 	}
 }

@@ -30,9 +30,9 @@ final class Cacheability {
 	public function __construct( private Http $http, private Registry $registry ) {}
 
 	/** @return array<string,mixed> */
-	public function check( string $url ): array {
+	public function check( string $url, array $headers = array() ): array {
 		$args = array(
-			'headers'     => array( 'X-PurgeKit-Inspect' => '1' ),
+			'headers'     => array_merge( $headers, array( 'X-PurgeKit-Inspect' => '1' ) ),
 			'timeout'     => 15,
 			'redirection' => 0, // A redirect is a finding of its own, not something to follow silently.
 		);

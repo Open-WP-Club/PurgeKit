@@ -14,6 +14,7 @@ final class UninstallerTest extends \WP_UnitTestCase {
 		update_option( 'unrelated_option', 'keep' );
 		wp_schedule_event( time() + 60, 'hourly', Cron::SCAN );
 		wp_schedule_single_event( time() + 60, 'purgekit_warm' );
+		wp_schedule_single_event( time() + 60, \PurgeKit\Wp\AutoRunner::HOOK );
 
 		// The WordPress test case rewrites DROP TABLE into DROP TEMPORARY TABLE, so a real table that the plugin
 		// activation created stays in place. Check the statement PurgeKit sends instead; a real drop was verified
@@ -37,5 +38,6 @@ final class UninstallerTest extends \WP_UnitTestCase {
 		$this->assertSame( 'keep', get_option( 'unrelated_option' ) );
 		$this->assertFalse( wp_next_scheduled( Cron::SCAN ) );
 		$this->assertFalse( wp_next_scheduled( 'purgekit_warm' ) );
+		$this->assertFalse( wp_next_scheduled( \PurgeKit\Wp\AutoRunner::HOOK ) );
 	}
 }

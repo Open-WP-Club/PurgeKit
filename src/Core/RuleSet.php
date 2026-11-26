@@ -132,6 +132,15 @@ final class RuleSet {
 				Rule::HOME => $planner->plan( array( Change::forUrls( 'rule', array( $planner->home() ) ) ) ),
 				default    => $planner->plan( $bucket['changes'] ),
 			};
+			$origin = Rule::DEFAULT === $bucket['action'] ? $plan : $planner->plan( $bucket['changes'] );
+			if ( Rule::DEFAULT !== $bucket['action'] ) {
+				$why           = array_values( array_unique( array_merge( ...array_values( $origin->reasons ? $origin->reasons : array( array() ) ) ) ) );
+				$plan->reasons = array_fill_keys( $plan->all ? array( '*' ) : $plan->urls, $why );
+			}
+			foreach ( $plan->reasons as &$reasons ) {
+				$reasons = array_map( static fn( $why ) => $why . ( $bucket['rules'] ? ' → rule: ' . implode( ', ', array_keys( $bucket['rules'] ) ) : ' → default' ), $reasons );
+			}
+			unset( $reasons );
 			if ( $plan->isEmpty() ) {
 				continue;
 			}

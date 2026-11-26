@@ -31,9 +31,10 @@ final class WpHttp implements Http {
 		$results = \WpOrg\Requests\Requests::request_multiple(
 			$requests,
 			array(
-				'timeout'         => (int) ( $args['timeout'] ?? 15 ),
-				'connect_timeout' => 5,
-				'verify'          => $verify ? \WpOrg\Requests\Requests::get_certificate_path() : false,
+				'follow_redirects' => (int) ( $args['redirection'] ?? 5 ) > 0,
+				'timeout'          => (int) ( $args['timeout'] ?? 15 ),
+				'connect_timeout'  => 5,
+				'verify'           => $verify ? \WpOrg\Requests\Requests::get_certificate_path() : false,
 			)
 		);
 		foreach ( $urls as $i => $url ) {
